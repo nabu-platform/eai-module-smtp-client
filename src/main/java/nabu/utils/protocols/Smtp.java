@@ -17,7 +17,7 @@ import javax.jws.WebService;
 import javax.net.ssl.SSLContext;
 import javax.validation.constraints.NotNull;
 
-import nabu.utils.protocols.smtp.Attachment;
+import nabu.types.EmailAttachment;
 
 import org.apache.commons.net.smtp.AuthenticatingSMTPClient;
 import org.apache.commons.net.smtp.SMTPClient;
@@ -50,7 +50,7 @@ public class Smtp {
 	private ExecutionContext executionContext;
 	
 	@WebResult(name = "part")
-	public Part newEmailPart(@WebParam(name = "from") String from, @WebParam(name = "to") List<String> to, @WebParam(name = "cc") List<String> cc, @WebParam(name = "subject") String subject, @WebParam(name = "content") InputStream content, @WebParam(name = "type") EmailType type, @WebParam(name = "headers") List<Header> headers, @WebParam(name = "attachments") List<Attachment> attachments) {
+	public Part newEmailPart(@WebParam(name = "from") String from, @WebParam(name = "to") List<String> to, @WebParam(name = "cc") List<String> cc, @WebParam(name = "subject") String subject, @WebParam(name = "content") InputStream content, @WebParam(name = "type") EmailType type, @WebParam(name = "headers") List<Header> headers, @WebParam(name = "attachments") List<EmailAttachment> attachments) {
 		if (type == null) {
 			type = EmailType.HTML;
 		}
@@ -62,7 +62,7 @@ public class Smtp {
 			// first we add the content part
 			multiPart.addChild(part);
 			// add the attachments
-			for (Attachment attachment : attachments) {
+			for (EmailAttachment attachment : attachments) {
 				PlainMimeContentPart attachmentPart = new PlainMimeContentPart(multiPart, IOUtils.wrap(content), 
 					new MimeHeader("Content-Type", attachment.getContentType())
 				);

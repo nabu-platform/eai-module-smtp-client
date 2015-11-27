@@ -1,4 +1,4 @@
-package nabu.utils.protocols.smtp;
+package nabu.types;
 
 import java.io.InputStream;
 import java.util.List;
@@ -7,8 +7,8 @@ import javax.xml.bind.annotation.XmlRootElement;
 
 import be.nabu.utils.mime.api.Header;
 
-@XmlRootElement(name = "attachment")
-public class Attachment {
+@XmlRootElement(name = "emailAttachment")
+public class EmailAttachment {
 	private String name, contentType;
 	private InputStream content;
 	private Boolean inline;
