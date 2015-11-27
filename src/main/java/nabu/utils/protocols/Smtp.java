@@ -1,6 +1,7 @@
-package nabu.protocols;
+package nabu.utils.protocols;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Writer;
 import java.net.InetAddress;
 import java.nio.charset.Charset;
@@ -11,6 +12,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.List;
 
 import javax.jws.WebParam;
+import javax.jws.WebResult;
 import javax.jws.WebService;
 import javax.net.ssl.SSLContext;
 import javax.validation.constraints.NotNull;
@@ -28,9 +30,14 @@ import be.nabu.module.protocol.smtp.LoginMethod;
 import be.nabu.module.protocol.smtp.SMTPServerArtifact;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.containers.chars.WritableStraightByteToCharContainer;
+import be.nabu.utils.mime.api.Header;
+import be.nabu.utils.mime.api.ModifiablePart;
 import be.nabu.utils.mime.api.Part;
 import be.nabu.utils.mime.impl.FormatException;
 import be.nabu.utils.mime.impl.MimeFormatter;
+import be.nabu.utils.mime.impl.MimeHeader;
+import be.nabu.utils.mime.impl.PlainMimeContentPart;
+import be.nabu.utils.mime.impl.PlainMimeMultiPart;
 import be.nabu.utils.security.SSLContextType;
 
 @WebService
@@ -39,6 +46,65 @@ public class Smtp {
 	private Logger logger = LoggerFactory.getLogger(getClass());
 	
 	private ExecutionContext executionContext;
+	
+	@WebResult(name = "part")
+	public Part newEmailPart(@WebParam(name = "from") String from, @WebParam(name = "to") List<String> to, @WebParam(name = "cc") List<String> cc, @WebParam(name = "subject") String subject, @WebParam(name = "content") InputStream content, @WebParam(name = "type") EmailType type, @WebParam(name = "headers") List<Header> headers, @WebParam(name = "attachments") List<Attachment> attachments) {
+		if (type == null) {
+			type = EmailType.HTML;
+		}
+		ModifiablePart part = new PlainMimeContentPart(null, IOUtils.wrap(content), 
+			new MimeHeader("Content-Type", type.getContentType())
+		);
+		if (attachments != null && !attachments.isEmpty()) {
+			PlainMimeMultiPart multiPart = new PlainMimeMultiPart(null);
+			// first we add the content part
+			multiPart.addChild(part);
+			// add the attachments
+			for (Attachment attachment : attachments) {
+				PlainMimeContentPart attachmentPart = new PlainMimeContentPart(multiPart, IOUtils.wrap(content), 
+					new MimeHeader("Content-Type", attachment.getContentType())
+				);
+				MimeHeader dispositionHeader = new MimeHeader("Content-Disposition", attachment.getInline() != null && attachment.getInline() ? "inline" : "attachment");
+				if (attachment.getHeaders() != null) {
+					for (Header header : attachment.getHeaders()) {
+						attachmentPart.setHeader(header);
+					}
+				}
+				if (attachment.getName() != null) {
+					dispositionHeader.addComment("filename=" + attachment.getName());
+				}
+				attachmentPart.setHeader(dispositionHeader);
+				multiPart.addChild(attachmentPart);
+			}
+			part = multiPart;
+		}
+		if (subject != null) {
+			part.setHeader(new MimeHeader("Subject", subject));
+		}
+		if (to != null && !to.isEmpty()) {
+			part.setHeader(new MimeHeader("To", join(to)));
+		}
+		if (cc != null && !cc.isEmpty()) {
+			part.setHeader(new MimeHeader("Cc", join(cc)));
+		}
+		if (headers != null) {
+			for (Header header : headers) {
+				part.setHeader(header);
+			}
+		}
+		return part;
+	}
+	
+	private static String join(List<String> recipients) {
+		StringBuilder builder = new StringBuilder();
+		for (int i = 0; i < recipients.size(); i++) {
+			if (i > 0) {
+				builder.append(", ");
+			}
+			builder.append(recipients.get(i));
+		}
+		return builder.toString();
+	}
 	
 	public void send(@WebParam(name = "part") Part part, @WebParam(name = "from") @NotNull String from, @WebParam(name = "to") @NotNull List<String> to, @WebParam(name = "smtpServerId") @NotNull String smtpServerId) throws IOException, NoSuchAlgorithmException, KeyStoreException, InvalidKeyException, InvalidKeySpecException, FormatException {
 		if (part == null) {
