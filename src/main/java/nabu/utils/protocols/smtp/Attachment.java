@@ -1,4 +1,4 @@
-package nabu.utils.protocols;
+package nabu.utils.protocols.smtp;
 
 import java.io.InputStream;
 import java.util.List;

@@ -17,6 +17,8 @@ import javax.jws.WebService;
 import javax.net.ssl.SSLContext;
 import javax.validation.constraints.NotNull;
 
+import nabu.utils.protocols.smtp.Attachment;
+
 import org.apache.commons.net.smtp.AuthenticatingSMTPClient;
 import org.apache.commons.net.smtp.SMTPClient;
 import org.apache.commons.net.smtp.SMTPReply;
