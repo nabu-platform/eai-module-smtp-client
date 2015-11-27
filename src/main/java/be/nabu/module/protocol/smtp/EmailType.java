@@ -1,4 +1,4 @@
-package nabu.utils.protocols;
+package be.nabu.module.protocol.smtp;
 
 public enum EmailType {
 	TEXT("text/plain"),

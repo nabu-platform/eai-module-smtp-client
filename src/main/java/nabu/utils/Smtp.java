@@ -1,4 +1,4 @@
-package nabu.utils.protocols;
+package nabu.utils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import be.nabu.eai.repository.artifacts.keystore.DefinedKeyStore;
 import be.nabu.libs.services.api.ExecutionContext;
+import be.nabu.module.protocol.smtp.EmailType;
 import be.nabu.module.protocol.smtp.LoginMethod;
 import be.nabu.module.protocol.smtp.SMTPServerArtifact;
 import be.nabu.utils.io.IOUtils;
