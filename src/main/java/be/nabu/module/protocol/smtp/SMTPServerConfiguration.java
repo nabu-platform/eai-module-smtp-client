@@ -2,6 +2,9 @@ package be.nabu.module.protocol.smtp;
 
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlType;
+import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+
+import be.nabu.utils.security.EncryptionXmlAdapter;
 
 @XmlRootElement(name = "smtpServer")
 @XmlType(propOrder = { "keystoreId", "implicitSSL", "host", "port", "username", "password", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset" })
@@ -33,6 +36,7 @@ public class SMTPServerConfiguration {
 	public void setUsername(String username) {
 		this.username = username;
 	}
+	@XmlJavaTypeAdapter(value=EncryptionXmlAdapter.class)
 	public String getPassword() {
 		return password;
 	}
@@ -81,6 +85,5 @@ public class SMTPServerConfiguration {
 	public void setSocketTimeout(Integer socketTimeout) {
 		this.socketTimeout = socketTimeout;
 	}
-	
 	
 }
