@@ -1,4 +1,4 @@
-package be.nabu.module.protocol.smtp;
+package be.nabu.eai.module.smtp;
 
 import org.apache.commons.net.smtp.AuthenticatingSMTPClient;
 import org.apache.commons.net.smtp.AuthenticatingSMTPClient.AUTH_METHOD;

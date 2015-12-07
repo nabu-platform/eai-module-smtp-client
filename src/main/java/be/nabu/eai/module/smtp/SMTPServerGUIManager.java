@@ -1,4 +1,4 @@
-package be.nabu.module.protocol.smtp;
+package be.nabu.eai.module.smtp;
 
 import java.io.IOException;
 import java.util.List;

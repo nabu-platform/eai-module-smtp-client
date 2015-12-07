@@ -1,4 +1,4 @@
-package be.nabu.module.protocol.smtp;
+package be.nabu.eai.module.smtp;
 
 import be.nabu.eai.repository.api.Repository;
 import be.nabu.eai.repository.managers.base.JAXBArtifactManager;
