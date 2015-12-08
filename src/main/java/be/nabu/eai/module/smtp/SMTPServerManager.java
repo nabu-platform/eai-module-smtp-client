@@ -12,7 +12,7 @@ public class SMTPServerManager extends JAXBArtifactManager<SMTPServerConfigurati
 
 	@Override
 	protected SMTPServerArtifact newInstance(String id, ResourceContainer<?> container, Repository repository) {
-		return new SMTPServerArtifact(id, container);
+		return new SMTPServerArtifact(id, container, repository);
 	}
 
 }

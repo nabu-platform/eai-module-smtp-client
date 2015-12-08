@@ -22,7 +22,7 @@ public class SMTPServerGUIManager extends BaseJAXBGUIManager<SMTPServerConfigura
 
 	@Override
 	protected SMTPServerArtifact newInstance(MainController controller, RepositoryEntry entry, Value<?>... values) throws IOException {
-		return new SMTPServerArtifact(entry.getId(), entry.getContainer());
+		return new SMTPServerArtifact(entry.getId(), entry.getContainer(), entry.getRepository());
 	}
 
 	@Override
