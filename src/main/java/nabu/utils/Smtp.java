@@ -120,14 +120,7 @@ public class Smtp {
 		}
 		
 		// check if we have a configured keystore
-		DefinedKeyStore keystore = null;
-		if (smtp.getConfiguration().getKeystoreId() != null) {
-			keystore = executionContext.getServiceContext().getResolver(DefinedKeyStore.class).resolve(smtp.getConfiguration().getKeystoreId());
-			if (keystore == null) {
-				throw new IllegalArgumentException("Could not find the keystore: " + smtp.getConfiguration().getKeystoreId());	
-			}
-		}
-		
+		DefinedKeyStore keystore = smtp.getConfiguration().getKeystore();
 		SSLContext context = keystore == null ? null : keystore.getKeyStore().newContext(SSLContextType.TLS);
 		// use the default context if you have explicitly set the implicitSSL boolean
 		if (smtp.getConfiguration().getImplicitSSL() != null && context == null) {
