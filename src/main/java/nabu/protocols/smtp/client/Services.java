@@ -1,4 +1,4 @@
-package nabu.utils;
+package nabu.protocols.smtp.client;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,7 +17,7 @@ import javax.jws.WebService;
 import javax.net.ssl.SSLContext;
 import javax.validation.constraints.NotNull;
 
-import nabu.types.EmailAttachment;
+import nabu.protocols.smtp.client.types.EmailAttachment;
 
 import org.apache.commons.net.smtp.AuthenticatingSMTPClient;
 import org.apache.commons.net.smtp.SMTPClient;
@@ -44,7 +44,7 @@ import be.nabu.utils.mime.impl.PlainMimeMultiPart;
 import be.nabu.utils.security.SSLContextType;
 
 @WebService
-public class Smtp {
+public class Services {
 	
 	private Logger logger = LoggerFactory.getLogger(getClass());
 	

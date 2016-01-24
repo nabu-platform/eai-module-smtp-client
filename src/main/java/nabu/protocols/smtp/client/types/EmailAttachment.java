@@ -1,4 +1,4 @@
-package nabu.types;
+package nabu.protocols.smtp.client.types;
 
 import java.io.InputStream;
 import java.util.List;
