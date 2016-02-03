@@ -12,7 +12,7 @@ import be.nabu.libs.property.api.Value;
 public class SMTPClientGUIManager extends BaseJAXBGUIManager<SMTPClientConfiguration, SMTPClientArtifact> {
 
 	public SMTPClientGUIManager() {
-		super("SMTP Server", SMTPClientArtifact.class, new SMTPClientManager(), SMTPClientConfiguration.class);
+		super("SMTP Client", SMTPClientArtifact.class, new SMTPClientManager(), SMTPClientConfiguration.class);
 	}
 
 	@Override
