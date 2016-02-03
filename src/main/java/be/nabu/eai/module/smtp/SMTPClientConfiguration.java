@@ -5,7 +5,7 @@ import javax.xml.bind.annotation.XmlType;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
 import be.nabu.eai.api.EnvironmentSpecific;
-import be.nabu.eai.repository.artifacts.keystore.DefinedKeyStore;
+import be.nabu.eai.module.keystore.KeyStoreArtifact;
 import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
 import be.nabu.utils.security.EncryptionXmlAdapter;
 
@@ -13,7 +13,7 @@ import be.nabu.utils.security.EncryptionXmlAdapter;
 @XmlType(propOrder = { "keystore", "implicitSSL", "host", "port", "username", "password", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset" })
 public class SMTPClientConfiguration {
 	
-	private DefinedKeyStore keystore;
+	private KeyStoreArtifact keystore;
 	private String host, username, password;
 	private LoginMethod loginMethod;
 	private String clientHost;
@@ -23,10 +23,10 @@ public class SMTPClientConfiguration {
 	
 	@EnvironmentSpecific
 	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
-	public DefinedKeyStore getKeystore() {
+	public KeyStoreArtifact getKeystore() {
 		return keystore;
 	}
-	public void setKeystore(DefinedKeyStore keystore) {
+	public void setKeystore(KeyStoreArtifact keystore) {
 		this.keystore = keystore;
 	}
 	

@@ -26,10 +26,10 @@ import org.apache.commons.net.smtp.SMTPSClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import be.nabu.eai.module.keystore.KeyStoreArtifact;
 import be.nabu.eai.module.smtp.EmailType;
 import be.nabu.eai.module.smtp.LoginMethod;
 import be.nabu.eai.module.smtp.SMTPClientArtifact;
-import be.nabu.eai.repository.artifacts.keystore.DefinedKeyStore;
 import be.nabu.libs.services.api.ExecutionContext;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.containers.chars.WritableStraightByteToCharContainer;
@@ -120,7 +120,7 @@ public class Services {
 		}
 		
 		// check if we have a configured keystore
-		DefinedKeyStore keystore = smtp.getConfiguration().getKeystore();
+		KeyStoreArtifact keystore = smtp.getConfiguration().getKeystore();
 		SSLContext context = keystore == null ? null : keystore.getKeyStore().newContext(SSLContextType.TLS);
 		// use the default context if you have explicitly set the implicitSSL boolean
 		if (smtp.getConfiguration().getImplicitSSL() != null && context == null) {
