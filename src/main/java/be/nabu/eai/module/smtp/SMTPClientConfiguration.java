@@ -11,7 +11,7 @@ import be.nabu.utils.security.EncryptionXmlAdapter;
 
 @XmlRootElement(name = "smtpServer")
 @XmlType(propOrder = { "keystore", "implicitSSL", "host", "port", "username", "password", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset" })
-public class SMTPServerConfiguration {
+public class SMTPClientConfiguration {
 	
 	private DefinedKeyStore keystore;
 	private String host, username, password;

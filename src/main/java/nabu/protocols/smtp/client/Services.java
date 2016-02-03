@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import be.nabu.eai.module.smtp.EmailType;
 import be.nabu.eai.module.smtp.LoginMethod;
-import be.nabu.eai.module.smtp.SMTPServerArtifact;
+import be.nabu.eai.module.smtp.SMTPClientArtifact;
 import be.nabu.eai.repository.artifacts.keystore.DefinedKeyStore;
 import be.nabu.libs.services.api.ExecutionContext;
 import be.nabu.utils.io.IOUtils;
@@ -114,7 +114,7 @@ public class Services {
 			return;
 		}
 		// get the smtp server
-		SMTPServerArtifact smtp = executionContext.getServiceContext().getResolver(SMTPServerArtifact.class).resolve(smtpServerId);
+		SMTPClientArtifact smtp = executionContext.getServiceContext().getResolver(SMTPClientArtifact.class).resolve(smtpServerId);
 		if (smtp == null) {
 			throw new IllegalArgumentException("Could not find the smtp server: " + smtpServerId);
 		}

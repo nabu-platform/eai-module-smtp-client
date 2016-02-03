@@ -9,10 +9,10 @@ import be.nabu.eai.repository.resources.RepositoryEntry;
 import be.nabu.libs.property.api.Property;
 import be.nabu.libs.property.api.Value;
 
-public class SMTPServerGUIManager extends BaseJAXBGUIManager<SMTPServerConfiguration, SMTPServerArtifact> {
+public class SMTPClientGUIManager extends BaseJAXBGUIManager<SMTPClientConfiguration, SMTPClientArtifact> {
 
-	public SMTPServerGUIManager() {
-		super("SMTP Server", SMTPServerArtifact.class, new SMTPServerManager(), SMTPServerConfiguration.class);
+	public SMTPClientGUIManager() {
+		super("SMTP Server", SMTPClientArtifact.class, new SMTPClientManager(), SMTPClientConfiguration.class);
 	}
 
 	@Override
@@ -21,8 +21,8 @@ public class SMTPServerGUIManager extends BaseJAXBGUIManager<SMTPServerConfigura
 	}
 
 	@Override
-	protected SMTPServerArtifact newInstance(MainController controller, RepositoryEntry entry, Value<?>... values) throws IOException {
-		return new SMTPServerArtifact(entry.getId(), entry.getContainer(), entry.getRepository());
+	protected SMTPClientArtifact newInstance(MainController controller, RepositoryEntry entry, Value<?>... values) throws IOException {
+		return new SMTPClientArtifact(entry.getId(), entry.getContainer(), entry.getRepository());
 	}
 
 	@Override
