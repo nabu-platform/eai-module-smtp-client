@@ -10,7 +10,7 @@ import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
 import be.nabu.utils.security.EncryptionXmlAdapter;
 
 @XmlRootElement(name = "smtpServer")
-@XmlType(propOrder = { "keystore", "implicitSSL", "host", "port", "username", "password", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset" })
+@XmlType(propOrder = { "keystore", "implicitSSL", "host", "port", "username", "password", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset", "blacklist" })
 public class SMTPClientConfiguration {
 	
 	private KeyStoreArtifact keystore;
@@ -20,6 +20,7 @@ public class SMTPClientConfiguration {
 	private Integer port, connectionTimeout, socketTimeout;
 	private Boolean implicitSSL;
 	private String charset;
+	private String blacklist;
 	
 	@EnvironmentSpecific
 	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
@@ -108,4 +109,12 @@ public class SMTPClientConfiguration {
 		this.socketTimeout = socketTimeout;
 	}
 	
+	@EnvironmentSpecific
+	public String getBlacklist() {
+		return blacklist;
+	}
+	public void setBlacklist(String blacklist) {
+		this.blacklist = blacklist;
+	}
+
 }

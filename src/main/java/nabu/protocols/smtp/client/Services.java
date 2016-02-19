@@ -9,6 +9,7 @@ import java.security.InvalidKeyException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
+import java.util.Iterator;
 import java.util.List;
 
 import javax.jws.WebParam;
@@ -17,6 +18,7 @@ import javax.jws.WebService;
 import javax.net.ssl.SSLContext;
 import javax.validation.constraints.NotNull;
 
+import nabu.protocols.smtp.client.types.SMTPClientInformation;
 import nabu.protocols.smtp.client.types.EmailAttachment;
 
 import org.apache.commons.net.smtp.AuthenticatingSMTPClient;
@@ -109,14 +111,55 @@ public class Services {
 		return builder.toString();
 	}
 	
-	public void send(@WebParam(name = "part") Part part, @WebParam(name = "from") @NotNull String from, @WebParam(name = "to") @NotNull List<String> to, @WebParam(name = "smtpServerId") @NotNull String smtpServerId) throws IOException, NoSuchAlgorithmException, KeyStoreException, InvalidKeyException, InvalidKeySpecException, FormatException {
+	@WebResult(name = "information")
+	public SMTPClientInformation information(@NotNull @WebParam(name = "smtpClientId") String smtpClientId) throws IOException {
+		SMTPClientArtifact smtp = executionContext.getServiceContext().getResolver(SMTPClientArtifact.class).resolve(smtpClientId);
+		if (smtp == null) {
+			throw new IllegalArgumentException("Could not find the smtp server: " + smtpClientId);
+		}
+		SMTPClientInformation information = new SMTPClientInformation();
+		information.setBlacklist(smtp.getConfiguration().getBlacklist());
+		information.setCharset(smtp.getConfiguration().getCharset());
+		information.setClientHost(smtp.getConfiguration().getClientHost());
+		information.setConnectionTimeout(smtp.getConfiguration().getConnectionTimeout());
+		information.setHost(smtp.getConfiguration().getHost());
+		information.setImplicitSSL(smtp.getConfiguration().getImplicitSSL());
+		information.setPort(smtp.getConfiguration().getPort());
+		information.setSocketTimeout(smtp.getConfiguration().getSocketTimeout());
+		information.setUsername(smtp.getConfiguration().getUsername());
+		return information;
+	}
+	
+	public void send(@WebParam(name = "part") Part part, @WebParam(name = "from") String from, @WebParam(name = "to") @NotNull List<String> to, @WebParam(name = "smtpClientId") @NotNull String smtpClientId) throws IOException, NoSuchAlgorithmException, KeyStoreException, InvalidKeyException, InvalidKeySpecException, FormatException {
 		if (part == null) {
 			return;
 		}
-		// get the smtp server
-		SMTPClientArtifact smtp = executionContext.getServiceContext().getResolver(SMTPClientArtifact.class).resolve(smtpServerId);
+		
+		// get the client
+		SMTPClientArtifact smtp = executionContext.getServiceContext().getResolver(SMTPClientArtifact.class).resolve(smtpClientId);
 		if (smtp == null) {
-			throw new IllegalArgumentException("Could not find the smtp server: " + smtpServerId);
+			throw new IllegalArgumentException("Could not find the smtp server: " + smtpClientId);
+		}
+
+		if (smtp.getConfiguration().getBlacklist() != null) {
+			// filter the "to" on the blacklist of the smtp artifact
+			Iterator<String> recipient = to.iterator();
+			while(recipient.hasNext()) {
+				if (recipient.next().matches(smtp.getConfiguration().getBlacklist())) {
+					recipient.remove();
+				}
+			}
+			// if after blacklisting there are no "to" remaining, don't send the mail
+			if (to.isEmpty()) {
+				return;
+			}
+		}
+		
+		if (from == null) {
+			from = smtp.getConfiguration().getUsername();
+			if (from == null) {
+				throw new IllegalArgumentException("No from given and did not find a username in the smtp artifact: " + smtpClientId);
+			}
 		}
 		
 		// check if we have a configured keystore
