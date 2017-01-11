@@ -162,16 +162,17 @@ public class Services {
 			}
 		}
 		
+		// check if we want implicit ssl
+		boolean implicitSSL = smtp.getConfiguration().getImplicitSSL() != null && smtp.getConfiguration().getImplicitSSL();
+		boolean startTls = smtp.getConfiguration().getStartTls() != null && smtp.getConfiguration().getStartTls();
+
 		// check if we have a configured keystore
 		KeyStoreArtifact keystore = smtp.getConfiguration().getKeystore();
 		SSLContext context = keystore == null ? null : keystore.getKeyStore().newContext(SSLContextType.TLS);
 		// use the default context if you have explicitly set the implicitSSL boolean
-		if (smtp.getConfiguration().getImplicitSSL() != null && context == null) {
+		if ((implicitSSL || startTls) && context == null) {
 			context = SSLContext.getDefault();
 		}
-		
-		// check if we want implicit ssl
-		boolean implicitSSL = smtp.getConfiguration().getImplicitSSL() != null && smtp.getConfiguration().getImplicitSSL();
 		
 		// check the port
 		int port;
@@ -218,39 +219,41 @@ public class Services {
 				checkReply(client, client.ehlo(clientHost), "Failed the ehlo command");
 				
 				// we want a secure connection if possible
-				if (context == null || implicitSSL || client.execTLS()) {
-					LoginMethod method = smtp.getConfiguration().getLoginMethod();
-					if (method == null) {
-						method = LoginMethod.CRAM_MD5;
+				if (startTls) {
+					if (!client.execTLS()) {
+						throw new RuntimeException("Could not start tls");
 					}
-					
-					logger.debug("Logging in using method '" + method + "' and username: " + smtp.getConfiguration().getUsername());
-					// authenticate
-					client.auth(method.getMethod(), smtp.getConfiguration().getUsername(), smtp.getConfiguration().getPassword());
-					checkReply(client, "Failed the login");
-					
-					logger.debug("Setting sender/receiver");
-					// set sender/recipients
-					client.setSender(from);
-					checkReply(client, "Failed to set sender: " + from);
-					for (String recipient : to) {
-						client.addRecipient(recipient);
-						checkReply(client, "Failed to set recipient: " + recipient);
-					}
-					
-					logger.debug("Sending data");
-					// let's start writing...
-					Writer writer = client.sendMessageData();
-					MimeFormatter formatter = new MimeFormatter();
-					WritableStraightByteToCharContainer output = new WritableStraightByteToCharContainer(IOUtils.wrap(writer));
-					formatter.format(part, output);
-					output.close();
-					if (!client.completePendingCommand()) {
-						throw new RuntimeException("Could not send the data: " + client.getReply() + " : " + client.getReplyString());
-					}
+					// resend the ehlo according to spec: http://www.ietf.org/rfc/rfc3207.txt (section 4.2)
+					checkReply(client, client.ehlo(clientHost), "Failed the ehlo command");	
 				}
-				else {
-					throw new RuntimeException("Secure connection could not be established");
+				LoginMethod method = smtp.getConfiguration().getLoginMethod();
+				if (method == null) {
+					method = LoginMethod.CRAM_MD5;
+				}
+				
+				logger.debug("Logging in using method '" + method + "' and username: " + smtp.getConfiguration().getUsername());
+				// authenticate
+				client.auth(method.getMethod(), smtp.getConfiguration().getUsername(), smtp.getConfiguration().getPassword());
+				checkReply(client, "Failed the login");
+				
+				logger.debug("Setting sender/receiver");
+				// set sender/recipients
+				client.setSender(from);
+				checkReply(client, "Failed to set sender: " + from);
+				for (String recipient : to) {
+					client.addRecipient(recipient);
+					checkReply(client, "Failed to set recipient: " + recipient);
+				}
+				
+				logger.debug("Sending data");
+				// let's start writing...
+				Writer writer = client.sendMessageData();
+				MimeFormatter formatter = new MimeFormatter();
+				WritableStraightByteToCharContainer output = new WritableStraightByteToCharContainer(IOUtils.wrap(writer));
+				formatter.format(part, output);
+				output.close();
+				if (!client.completePendingCommand()) {
+					throw new RuntimeException("Could not send the data: " + client.getReply() + " : " + client.getReplyString());
 				}
 			}
 			catch (RuntimeException e) {
