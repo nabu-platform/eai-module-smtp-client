@@ -1,5 +1,7 @@
 package be.nabu.eai.module.smtp;
 
+import java.util.List;
+
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlType;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
@@ -10,7 +12,7 @@ import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
 import be.nabu.utils.security.EncryptionXmlAdapter;
 
 @XmlRootElement(name = "smtpServer")
-@XmlType(propOrder = { "keystore", "implicitSSL", "startTls", "host", "port", "username", "password", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset", "blacklist" })
+@XmlType(propOrder = { "keystore", "implicitSSL", "startTls", "host", "port", "username", "password", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset", "blacklist", "bcc", "overrideTo" })
 public class SMTPClientConfiguration {
 	
 	private KeyStoreArtifact keystore;
@@ -22,6 +24,8 @@ public class SMTPClientConfiguration {
 	private Boolean startTls;
 	private String charset;
 	private String blacklist;
+	private List<String> bcc;
+	private List<String> overrideTo;
 	
 	@EnvironmentSpecific
 	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
@@ -123,5 +127,22 @@ public class SMTPClientConfiguration {
 	public void setStartTls(Boolean startTls) {
 		this.startTls = startTls;
 	}
+	
+	@EnvironmentSpecific
+	public List<String> getBcc() {
+		return bcc;
+	}
+	public void setBcc(List<String> bcc) {
+		this.bcc = bcc;
+	}
+	
+	@EnvironmentSpecific
+	public List<String> getOverrideTo() {
+		return overrideTo;
+	}
+	public void setOverrideTo(List<String> overrideTo) {
+		this.overrideTo = overrideTo;
+	}
+	
 
 }

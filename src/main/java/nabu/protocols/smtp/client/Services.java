@@ -141,7 +141,11 @@ public class Services {
 			throw new IllegalArgumentException("Could not find the smtp server: " + smtpClientId);
 		}
 
-		if (smtp.getConfiguration().getBlacklist() != null) {
+		// this is mostly for test purposes
+		if (smtp.getConfig().getOverrideTo() != null && !smtp.getConfig().getOverrideTo().isEmpty()) {
+			to = smtp.getConfig().getOverrideTo();
+		}
+		else if (smtp.getConfiguration().getBlacklist() != null) {
 			// filter the "to" on the blacklist of the smtp artifact
 			Iterator<String> recipient = to.iterator();
 			while(recipient.hasNext()) {
@@ -224,7 +228,7 @@ public class Services {
 						throw new RuntimeException("Could not start tls");
 					}
 					// resend the ehlo according to spec: http://www.ietf.org/rfc/rfc3207.txt (section 4.2)
-					checkReply(client, client.ehlo(clientHost), "Failed the ehlo command");	
+					checkReply(client, client.ehlo(clientHost), "Failed the ehlo command");
 				}
 				LoginMethod method = smtp.getConfiguration().getLoginMethod();
 				if (method == null) {
@@ -243,6 +247,13 @@ public class Services {
 				for (String recipient : to) {
 					client.addRecipient(recipient);
 					checkReply(client, "Failed to set recipient: " + recipient);
+				}
+				// it is often interesting to also combine all sent mails in a central mailbox for later complaints
+				if (smtp.getConfig().getBcc() != null && !smtp.getConfig().getBcc().isEmpty()) {
+					for (String recipient : smtp.getConfig().getBcc()) {
+						client.addRecipient(recipient);
+						checkReply(client, "Failed to set recipient: " + recipient);	
+					}
 				}
 				
 				logger.debug("Sending data");
