@@ -83,6 +83,9 @@ public class Services {
 			}
 			part = multiPart;
 		}
+		if (from != null && !from.isEmpty()) {
+			part.setHeader(new MimeHeader("From", from));
+		}
 		if (subject != null) {
 			part.setHeader(new MimeHeader("Subject", subject));
 		}
