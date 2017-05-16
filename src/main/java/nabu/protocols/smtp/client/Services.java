@@ -61,13 +61,13 @@ public class Services {
 			new MimeHeader("Content-Type", type.getContentType())
 		);
 		if (attachments != null && !attachments.isEmpty()) {
-			PlainMimeMultiPart multiPart = new PlainMimeMultiPart(null);
+			PlainMimeMultiPart multiPart = new PlainMimeMultiPart(null, new MimeHeader("Content-Type", "multipart/mixed"));
 			// first we add the content part
 			multiPart.addChild(part);
 			// add the attachments
 			for (EmailAttachment attachment : attachments) {
 				PlainMimeContentPart attachmentPart = new PlainMimeContentPart(multiPart, IOUtils.wrap(content), 
-					new MimeHeader("Content-Type", attachment.getContentType())
+					new MimeHeader("Content-Type", attachment.getContentType() == null ? "application/octet-stream" : attachment.getContentType())
 				);
 				MimeHeader dispositionHeader = new MimeHeader("Content-Disposition", attachment.getInline() != null && attachment.getInline() ? "inline" : "attachment");
 				if (attachment.getHeaders() != null) {
@@ -76,7 +76,7 @@ public class Services {
 					}
 				}
 				if (attachment.getName() != null) {
-					dispositionHeader.addComment("filename=" + attachment.getName());
+					dispositionHeader.addComment("filename=\"" + attachment.getName() + "\"");
 				}
 				attachmentPart.setHeader(dispositionHeader);
 				multiPart.addChild(attachmentPart);
