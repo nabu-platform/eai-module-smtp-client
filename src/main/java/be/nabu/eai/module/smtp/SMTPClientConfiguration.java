@@ -93,6 +93,7 @@ public class SMTPClientConfiguration {
 		this.loginMethod = loginMethod;
 	}
 	
+	@EnvironmentSpecific
 	public String getCharset() {
 		return charset;
 	}
@@ -100,6 +101,7 @@ public class SMTPClientConfiguration {
 		this.charset = charset;
 	}
 	
+	@EnvironmentSpecific
 	public Integer getConnectionTimeout() {
 		return connectionTimeout;
 	}
@@ -107,6 +109,7 @@ public class SMTPClientConfiguration {
 		this.connectionTimeout = connectionTimeout;
 	}
 	
+	@EnvironmentSpecific
 	public Integer getSocketTimeout() {
 		return socketTimeout;
 	}
@@ -121,6 +124,8 @@ public class SMTPClientConfiguration {
 	public void setBlacklist(String blacklist) {
 		this.blacklist = blacklist;
 	}
+	
+	@EnvironmentSpecific
 	public Boolean getStartTls() {
 		return startTls;
 	}

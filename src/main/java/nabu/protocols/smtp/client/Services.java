@@ -5,10 +5,7 @@ import java.io.InputStream;
 import java.io.Writer;
 import java.net.InetAddress;
 import java.nio.charset.Charset;
-import java.security.InvalidKeyException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.spec.InvalidKeySpecException;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -18,8 +15,8 @@ import javax.jws.WebService;
 import javax.net.ssl.SSLContext;
 import javax.validation.constraints.NotNull;
 
-import nabu.protocols.smtp.client.types.SMTPClientInformation;
 import nabu.protocols.smtp.client.types.EmailAttachment;
+import nabu.protocols.smtp.client.types.SMTPClientInformation;
 
 import org.apache.commons.net.smtp.AuthenticatingSMTPClient;
 import org.apache.commons.net.smtp.SMTPClient;
@@ -32,13 +29,15 @@ import be.nabu.eai.module.keystore.KeyStoreArtifact;
 import be.nabu.eai.module.smtp.EmailType;
 import be.nabu.eai.module.smtp.LoginMethod;
 import be.nabu.eai.module.smtp.SMTPClientArtifact;
+import be.nabu.eai.repository.Notification;
 import be.nabu.libs.services.api.ExecutionContext;
+import be.nabu.libs.validator.api.ValidationMessage.Severity;
 import be.nabu.utils.io.IOUtils;
+import be.nabu.utils.io.api.ByteBuffer;
 import be.nabu.utils.io.containers.chars.WritableStraightByteToCharContainer;
 import be.nabu.utils.mime.api.Header;
 import be.nabu.utils.mime.api.ModifiablePart;
 import be.nabu.utils.mime.api.Part;
-import be.nabu.utils.mime.impl.FormatException;
 import be.nabu.utils.mime.impl.MimeFormatter;
 import be.nabu.utils.mime.impl.MimeHeader;
 import be.nabu.utils.mime.impl.PlainMimeContentPart;
@@ -133,179 +132,117 @@ public class Services {
 		return information;
 	}
 	
-	public void send(@WebParam(name = "part") Part part, @WebParam(name = "from") String from, @WebParam(name = "to") @NotNull List<String> to, @WebParam(name = "smtpClientId") @NotNull String smtpClientId) throws IOException, NoSuchAlgorithmException, KeyStoreException, InvalidKeyException, InvalidKeySpecException, FormatException {
+	public void send(@WebParam(name = "part") Part part, @WebParam(name = "from") String from, @WebParam(name = "to") @NotNull List<String> to, @WebParam(name = "smtpClientId") @NotNull String smtpClientId, @WebParam(name = "notifyOnFailure") Boolean notifyOnFailure) throws Exception {
 		if (part == null) {
 			return;
 		}
-		
 		// get the client
 		SMTPClientArtifact smtp = executionContext.getServiceContext().getResolver(SMTPClientArtifact.class).resolve(smtpClientId);
 		if (smtp == null) {
 			throw new IllegalArgumentException("Could not find the smtp server: " + smtpClientId);
 		}
-
-		// this is mostly for test purposes
-		if (smtp.getConfig().getOverrideTo() != null && !smtp.getConfig().getOverrideTo().isEmpty()) {
-			to = smtp.getConfig().getOverrideTo();
-		}
-		else if (smtp.getConfiguration().getBlacklist() != null) {
-			// filter the "to" on the blacklist of the smtp artifact
-			Iterator<String> recipient = to.iterator();
-			while(recipient.hasNext()) {
-				if (recipient.next().matches(smtp.getConfiguration().getBlacklist())) {
-					recipient.remove();
+		
+		try {
+			// this is mostly for test purposes
+			if (smtp.getConfig().getOverrideTo() != null && !smtp.getConfig().getOverrideTo().isEmpty()) {
+				to = smtp.getConfig().getOverrideTo();
+			}
+			else if (smtp.getConfiguration().getBlacklist() != null) {
+				// filter the "to" on the blacklist of the smtp artifact
+				Iterator<String> recipient = to.iterator();
+				while(recipient.hasNext()) {
+					if (recipient.next().matches(smtp.getConfiguration().getBlacklist())) {
+						recipient.remove();
+					}
+				}
+				// if after blacklisting there are no "to" remaining, don't send the mail
+				if (to.isEmpty()) {
+					return;
 				}
 			}
-			// if after blacklisting there are no "to" remaining, don't send the mail
-			if (to.isEmpty()) {
-				return;
-			}
-		}
-		
-		if (from == null) {
-			from = smtp.getConfiguration().getUsername();
+			
 			if (from == null) {
-				throw new IllegalArgumentException("No from given and did not find a username in the smtp artifact: " + smtpClientId);
-			}
-		}
-		
-		// check if we want implicit ssl
-		boolean implicitSSL = smtp.getConfiguration().getImplicitSSL() != null && smtp.getConfiguration().getImplicitSSL();
-		boolean startTls = smtp.getConfiguration().getStartTls() != null && smtp.getConfiguration().getStartTls();
-
-		// check if we have a configured keystore
-		KeyStoreArtifact keystore = smtp.getConfiguration().getKeystore();
-		SSLContext context = keystore == null ? null : keystore.getKeyStore().newContext(SSLContextType.TLS);
-		// use the default context if you have explicitly set the implicitSSL boolean
-		if ((implicitSSL || startTls) && context == null) {
-			context = SSLContext.getDefault();
-		}
-		
-		// check the port
-		int port;
-		if (smtp.getConfiguration().getPort() == null) {
-			port = implicitSSL ? 465 : 25;
-		}
-		else {
-			port = smtp.getConfiguration().getPort();
-		}
-		String clientHost = smtp.getConfiguration().getClientHost() == null
-			? InetAddress.getLocalHost().getHostName()
-			: smtp.getConfiguration().getClientHost();
-		
-		// if we want to authenticate, use the appropriate client
-		if (smtp.getConfiguration().getUsername() != null) {
-			logger.debug("Starting " + (context == null ? "insecure" : "secure") + " connection with authentication");
-			AuthenticatingSMTPClient client = context == null 
-				? new AuthenticatingSMTPClient() 
-				: new AuthenticatingSMTPClient(implicitSSL, context);
-			// set the connection timeout
-			if (smtp.getConfiguration().getConnectionTimeout() != null) {
-				client.setConnectTimeout(smtp.getConfiguration().getConnectionTimeout());
-			}
-			// not entirely sure how this differs from the connection timeout...
-			if (smtp.getConfiguration().getConnectionTimeout() != null) {
-				client.setDefaultTimeout(smtp.getConfiguration().getConnectionTimeout());
-			}
-			// set charset (if any)
-			if (smtp.getConfiguration().getCharset() != null) {
-				client.setCharset(Charset.forName(smtp.getConfiguration().getCharset()));
+				from = smtp.getConfiguration().getUsername();
+				if (from == null) {
+					throw new IllegalArgumentException("No from given and did not find a username in the smtp artifact: " + smtpClientId);
+				}
 			}
 			
-			logger.debug("Connecting to: " + smtp.getConfiguration().getHost() + ":" + port);
-			// connect
-			client.connect(smtp.getConfiguration().getHost(), port);
-			checkReply(client, "Could not connect to server");
-			
-			if (smtp.getConfiguration().getSocketTimeout() != null) {
-				client.setSoTimeout(smtp.getConfiguration().getSocketTimeout());
+			// check if we want implicit ssl
+			boolean implicitSSL = smtp.getConfiguration().getImplicitSSL() != null && smtp.getConfiguration().getImplicitSSL();
+			boolean startTls = smtp.getConfiguration().getStartTls() != null && smtp.getConfiguration().getStartTls();
+	
+			// check if we have a configured keystore
+			KeyStoreArtifact keystore = smtp.getConfiguration().getKeystore();
+			SSLContext context = keystore == null ? null : keystore.getKeyStore().newContext(SSLContextType.TLS);
+			// use the default context if you have explicitly set the implicitSSL boolean
+			if ((implicitSSL || startTls) && context == null) {
+				context = SSLContext.getDefault();
 			}
-			try {
-				logger.debug("Sending EHLO");
-				// perform an ehlo
-				checkReply(client, client.ehlo(clientHost), "Failed the ehlo command");
+			
+			// check the port
+			int port;
+			if (smtp.getConfiguration().getPort() == null) {
+				port = implicitSSL ? 465 : 25;
+			}
+			else {
+				port = smtp.getConfiguration().getPort();
+			}
+			String clientHost = smtp.getConfiguration().getClientHost() == null
+				? InetAddress.getLocalHost().getHostName()
+				: smtp.getConfiguration().getClientHost();
+			
+			// if we want to authenticate, use the appropriate client
+			if (smtp.getConfiguration().getUsername() != null) {
+				logger.debug("Starting " + (context == null ? "insecure" : "secure") + " connection with authentication");
+				AuthenticatingSMTPClient client = context == null 
+					? new AuthenticatingSMTPClient() 
+					: new AuthenticatingSMTPClient(implicitSSL, context);
+				// set the connection timeout
+				if (smtp.getConfiguration().getConnectionTimeout() != null) {
+					client.setConnectTimeout(smtp.getConfiguration().getConnectionTimeout());
+				}
+				// not entirely sure how this differs from the connection timeout...
+				if (smtp.getConfiguration().getConnectionTimeout() != null) {
+					client.setDefaultTimeout(smtp.getConfiguration().getConnectionTimeout());
+				}
+				// set charset (if any)
+				if (smtp.getConfiguration().getCharset() != null) {
+					client.setCharset(Charset.forName(smtp.getConfiguration().getCharset()));
+				}
 				
-				// we want a secure connection if possible
-				if (startTls) {
-					if (!client.execTLS()) {
-						throw new RuntimeException("Could not start tls");
-					}
-					// resend the ehlo according to spec: http://www.ietf.org/rfc/rfc3207.txt (section 4.2)
+				logger.debug("Connecting to: " + smtp.getConfiguration().getHost() + ":" + port);
+				// connect
+				client.connect(smtp.getConfiguration().getHost(), port);
+				checkReply(client, "Could not connect to server");
+				
+				if (smtp.getConfiguration().getSocketTimeout() != null) {
+					client.setSoTimeout(smtp.getConfiguration().getSocketTimeout());
+				}
+				try {
+					logger.debug("Sending EHLO");
+					// perform an ehlo
 					checkReply(client, client.ehlo(clientHost), "Failed the ehlo command");
-				}
-				LoginMethod method = smtp.getConfiguration().getLoginMethod();
-				if (method == null) {
-					method = LoginMethod.CRAM_MD5;
-				}
-				
-				logger.debug("Logging in using method '" + method + "' and username: " + smtp.getConfiguration().getUsername());
-				// authenticate
-				client.auth(method.getMethod(), smtp.getConfiguration().getUsername(), smtp.getConfiguration().getPassword());
-				checkReply(client, "Failed the login");
-				
-				logger.debug("Setting sender/receiver");
-				// set sender/recipients
-				client.setSender(from);
-				checkReply(client, "Failed to set sender: " + from);
-				for (String recipient : to) {
-					client.addRecipient(recipient);
-					checkReply(client, "Failed to set recipient: " + recipient);
-				}
-				// it is often interesting to also combine all sent mails in a central mailbox for later complaints
-				if (smtp.getConfig().getBcc() != null && !smtp.getConfig().getBcc().isEmpty()) {
-					for (String recipient : smtp.getConfig().getBcc()) {
-						client.addRecipient(recipient);
-						checkReply(client, "Failed to set recipient: " + recipient);	
+					
+					// we want a secure connection if possible
+					if (startTls) {
+						if (!client.execTLS()) {
+							throw new RuntimeException("Could not start tls");
+						}
+						// resend the ehlo according to spec: http://www.ietf.org/rfc/rfc3207.txt (section 4.2)
+						checkReply(client, client.ehlo(clientHost), "Failed the ehlo command");
 					}
-				}
-				
-				logger.debug("Sending data");
-				// let's start writing...
-				Writer writer = client.sendMessageData();
-				MimeFormatter formatter = new MimeFormatter();
-				WritableStraightByteToCharContainer output = new WritableStraightByteToCharContainer(IOUtils.wrap(writer));
-				formatter.format(part, output);
-				output.close();
-				if (!client.completePendingCommand()) {
-					throw new RuntimeException("Could not send the data: " + client.getReply() + " : " + client.getReplyString());
-				}
-			}
-			catch (RuntimeException e) {
-				logger.error("Could not complete request", e);
-				throw e;
-			}
-			finally {
-				client.logout();
-				client.disconnect();
-			}
-		}
-		else {
-			SMTPClient client = context == null ? new SMTPClient() : new SMTPSClient(implicitSSL, context);
-			// set the connection timeout
-			if (smtp.getConfiguration().getConnectionTimeout() != null) {
-				client.setConnectTimeout(smtp.getConfiguration().getConnectionTimeout());
-			}
-			// again, not sure what this is
-			if (smtp.getConfiguration().getConnectionTimeout() != null) {
-				client.setDefaultTimeout(smtp.getConfiguration().getConnectionTimeout());
-			}
-			// set the charset (if any)
-			if (smtp.getConfiguration().getCharset() != null) {
-				client.setCharset(Charset.forName(smtp.getConfiguration().getCharset()));
-			}
-				
-			// connect
-			client.connect(smtp.getConfiguration().getHost(), port);
-			checkReply(client, "Could not connect to server");
-
-			if (smtp.getConfiguration().getSocketTimeout() != null) {
-				client.setSoTimeout(smtp.getConfiguration().getSocketTimeout());
-			}
-			try {
-				// send helo
-				checkReply(client, client.helo(clientHost), "Failed the helo command");
-				
-				if (context == null || implicitSSL || ((SMTPSClient) client).execTLS()) {
+					LoginMethod method = smtp.getConfiguration().getLoginMethod();
+					if (method == null) {
+						method = LoginMethod.CRAM_MD5;
+					}
+					
+					logger.debug("Logging in using method '" + method + "' and username: " + smtp.getConfiguration().getUsername());
+					// authenticate
+					client.auth(method.getMethod(), smtp.getConfiguration().getUsername(), smtp.getConfiguration().getPassword());
+					checkReply(client, "Failed the login");
+					
+					logger.debug("Setting sender/receiver");
 					// set sender/recipients
 					client.setSender(from);
 					checkReply(client, "Failed to set sender: " + from);
@@ -313,7 +250,15 @@ public class Services {
 						client.addRecipient(recipient);
 						checkReply(client, "Failed to set recipient: " + recipient);
 					}
+					// it is often interesting to also combine all sent mails in a central mailbox for later complaints
+					if (smtp.getConfig().getBcc() != null && !smtp.getConfig().getBcc().isEmpty()) {
+						for (String recipient : smtp.getConfig().getBcc()) {
+							client.addRecipient(recipient);
+							checkReply(client, "Failed to set recipient: " + recipient);	
+						}
+					}
 					
+					logger.debug("Sending data");
 					// let's start writing...
 					Writer writer = client.sendMessageData();
 					MimeFormatter formatter = new MimeFormatter();
@@ -324,18 +269,128 @@ public class Services {
 						throw new RuntimeException("Could not send the data: " + client.getReply() + " : " + client.getReplyString());
 					}
 				}
-				else {
-					throw new RuntimeException("Secure connection could not be established");
+				catch (RuntimeException e) {
+					logger.error("Could not complete request", e);
+					throw e;
+				}
+				finally {
+					client.logout();
+					client.disconnect();
 				}
 			}
-			catch (RuntimeException e) {
-				logger.error("Could not complete request", e);
-				throw e;
+			else {
+				SMTPClient client = context == null ? new SMTPClient() : new SMTPSClient(implicitSSL, context);
+				// set the connection timeout
+				if (smtp.getConfiguration().getConnectionTimeout() != null) {
+					client.setConnectTimeout(smtp.getConfiguration().getConnectionTimeout());
+				}
+				// again, not sure what this is
+				if (smtp.getConfiguration().getConnectionTimeout() != null) {
+					client.setDefaultTimeout(smtp.getConfiguration().getConnectionTimeout());
+				}
+				// set the charset (if any)
+				if (smtp.getConfiguration().getCharset() != null) {
+					client.setCharset(Charset.forName(smtp.getConfiguration().getCharset()));
+				}
+					
+				// connect
+				client.connect(smtp.getConfiguration().getHost(), port);
+				checkReply(client, "Could not connect to server");
+	
+				if (smtp.getConfiguration().getSocketTimeout() != null) {
+					client.setSoTimeout(smtp.getConfiguration().getSocketTimeout());
+				}
+				try {
+					// send helo
+					checkReply(client, client.helo(clientHost), "Failed the helo command");
+					
+					if (context == null || implicitSSL || ((SMTPSClient) client).execTLS()) {
+						// set sender/recipients
+						client.setSender(from);
+						checkReply(client, "Failed to set sender: " + from);
+						for (String recipient : to) {
+							client.addRecipient(recipient);
+							checkReply(client, "Failed to set recipient: " + recipient);
+						}
+						
+						// let's start writing...
+						Writer writer = client.sendMessageData();
+						MimeFormatter formatter = new MimeFormatter();
+						WritableStraightByteToCharContainer output = new WritableStraightByteToCharContainer(IOUtils.wrap(writer));
+						formatter.format(part, output);
+						output.close();
+						if (!client.completePendingCommand()) {
+							throw new RuntimeException("Could not send the data: " + client.getReply() + " : " + client.getReplyString());
+						}
+					}
+					else {
+						throw new RuntimeException("Secure connection could not be established");
+					}
+				}
+				catch (RuntimeException e) {
+					logger.error("Could not complete request", e);
+					throw e;
+				}
+				finally {
+					client.logout();
+					client.disconnect();
+				}
 			}
-			finally {
-				client.logout();
-				client.disconnect();
+		}
+		catch (Exception e) {
+			if (notifyOnFailure == null || notifyOnFailure) {
+				// fire a notification
+				Notification notification = new Notification();
+				notification.setContext(Arrays.asList(smtpClientId));
+				// differentiate between client and server errors
+				notification.setType("nabu.protocols.smtp.client");
+				notification.setProperties(SmtpRequestSummary.build(from, to, part));
+				notification.setMessage("Failed to send email: " + e.getMessage());
+				notification.setDescription(Notification.format(e));
+				notification.setSeverity(Severity.ERROR);
+				smtp.getRepository().getEventDispatcher().fire(notification, smtp);
 			}
+			throw e;
+		}
+	}
+	
+	public static class SmtpRequestSummary {
+		private List<String> to;
+		private String from, content;
+		
+		public static SmtpRequestSummary build(String from, List<String> to, Part part) {
+			SmtpRequestSummary summary = new SmtpRequestSummary();
+			summary.setTo(to);
+			summary.setFrom(from);
+			try {
+				MimeFormatter formatter = new MimeFormatter();
+				formatter.setAllowBinary(false);
+				ByteBuffer buffer = IOUtils.newByteBuffer();
+				formatter.format(part, buffer);
+				summary.setContent(new String(IOUtils.toBytes(buffer), "UTF-8"));
+			}
+			catch (Exception e) {
+				summary.setContent(Notification.format(e));
+			}
+			return summary;
+		}
+		public List<String> getTo() {
+			return to;
+		}
+		public void setTo(List<String> to) {
+			this.to = to;
+		}
+		public String getFrom() {
+			return from;
+		}
+		public void setFrom(String from) {
+			this.from = from;
+		}
+		public String getContent() {
+			return content;
+		}
+		public void setContent(String content) {
+			this.content = content;
 		}
 	}
 
