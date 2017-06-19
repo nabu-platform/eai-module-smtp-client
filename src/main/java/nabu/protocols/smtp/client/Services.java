@@ -65,7 +65,7 @@ public class Services {
 			multiPart.addChild(part);
 			// add the attachments
 			for (EmailAttachment attachment : attachments) {
-				PlainMimeContentPart attachmentPart = new PlainMimeContentPart(multiPart, IOUtils.wrap(content), 
+				PlainMimeContentPart attachmentPart = new PlainMimeContentPart(multiPart, IOUtils.wrap(attachment.getContent()), 
 					new MimeHeader("Content-Type", attachment.getContentType() == null ? "application/octet-stream" : attachment.getContentType())
 				);
 				MimeHeader dispositionHeader = new MimeHeader("Content-Disposition", attachment.getInline() != null && attachment.getInline() ? "inline" : "attachment");
@@ -99,6 +99,7 @@ public class Services {
 				part.setHeader(header);
 			}
 		}
+		part.setHeader(new MimeHeader("Mime-Version", "1.0"));
 		return part;
 	}
 	
@@ -198,27 +199,41 @@ public class Services {
 				AuthenticatingSMTPClient client = context == null 
 					? new AuthenticatingSMTPClient() 
 					: new AuthenticatingSMTPClient(implicitSSL, context);
-				// set the connection timeout
-				if (smtp.getConfiguration().getConnectionTimeout() != null) {
-					client.setConnectTimeout(smtp.getConfiguration().getConnectionTimeout());
+				try {
+					// set the connection timeout
+					if (smtp.getConfiguration().getConnectionTimeout() != null) {
+						client.setConnectTimeout(smtp.getConfiguration().getConnectionTimeout());
+						// not entirely sure how this differs from the connection timeout...
+						client.setDefaultTimeout(smtp.getConfiguration().getConnectionTimeout());
+					}
+					else {
+						// default to 1 minute
+						client.setConnectTimeout(60000);
+						client.setDefaultTimeout(60000);
+					}
+					// set charset (if any)
+					if (smtp.getConfiguration().getCharset() != null) {
+						client.setCharset(Charset.forName(smtp.getConfiguration().getCharset()));
+					}
+					
+					logger.debug("Connecting to: " + smtp.getConfiguration().getHost() + ":" + port);
+					// connect
+					client.connect(smtp.getConfiguration().getHost(), port);
+					checkReply(client, "Could not connect to server");
+					
+					if (smtp.getConfiguration().getSocketTimeout() != null) {
+						client.setSoTimeout(smtp.getConfiguration().getSocketTimeout());
+					}
+					else {
+						// also default to 1 minute
+						client.setSoTimeout(60000);
+					}
 				}
-				// not entirely sure how this differs from the connection timeout...
-				if (smtp.getConfiguration().getConnectionTimeout() != null) {
-					client.setDefaultTimeout(smtp.getConfiguration().getConnectionTimeout());
+				catch (Exception e) {
+					logger.error("Failed to set up connection", e);
+					throw new RuntimeException(e);
 				}
-				// set charset (if any)
-				if (smtp.getConfiguration().getCharset() != null) {
-					client.setCharset(Charset.forName(smtp.getConfiguration().getCharset()));
-				}
-				
-				logger.debug("Connecting to: " + smtp.getConfiguration().getHost() + ":" + port);
-				// connect
-				client.connect(smtp.getConfiguration().getHost(), port);
-				checkReply(client, "Could not connect to server");
-				
-				if (smtp.getConfiguration().getSocketTimeout() != null) {
-					client.setSoTimeout(smtp.getConfiguration().getSocketTimeout());
-				}
+				boolean failed = false;
 				try {
 					logger.debug("Sending EHLO");
 					// perform an ehlo
@@ -242,11 +257,12 @@ public class Services {
 					client.auth(method.getMethod(), smtp.getConfiguration().getUsername(), smtp.getConfiguration().getPassword());
 					checkReply(client, "Failed the login");
 					
-					logger.debug("Setting sender/receiver");
+					logger.debug("Setting sender: {}", from);
 					// set sender/recipients
 					client.setSender(from);
 					checkReply(client, "Failed to set sender: " + from);
 					for (String recipient : to) {
+						logger.debug("Setting recipient: {}", recipient);
 						client.addRecipient(recipient);
 						checkReply(client, "Failed to set recipient: " + recipient);
 					}
@@ -271,48 +287,75 @@ public class Services {
 				}
 				catch (RuntimeException e) {
 					logger.error("Could not complete request", e);
+					failed = true;
 					throw e;
 				}
 				finally {
-					client.logout();
-					client.disconnect();
+					try {
+						client.logout();
+						client.disconnect();
+					}
+					catch (Exception e) {
+						if (!failed) {
+							throw new RuntimeException(e);
+						}
+					}
 				}
 			}
 			else {
+				logger.debug("Starting " + (context == null ? "insecure" : "secure") + " connection anonymously");
 				SMTPClient client = context == null ? new SMTPClient() : new SMTPSClient(implicitSSL, context);
-				// set the connection timeout
-				if (smtp.getConfiguration().getConnectionTimeout() != null) {
-					client.setConnectTimeout(smtp.getConfiguration().getConnectionTimeout());
-				}
-				// again, not sure what this is
-				if (smtp.getConfiguration().getConnectionTimeout() != null) {
-					client.setDefaultTimeout(smtp.getConfiguration().getConnectionTimeout());
-				}
-				// set the charset (if any)
-				if (smtp.getConfiguration().getCharset() != null) {
-					client.setCharset(Charset.forName(smtp.getConfiguration().getCharset()));
-				}
-					
-				// connect
-				client.connect(smtp.getConfiguration().getHost(), port);
-				checkReply(client, "Could not connect to server");
-	
-				if (smtp.getConfiguration().getSocketTimeout() != null) {
-					client.setSoTimeout(smtp.getConfiguration().getSocketTimeout());
-				}
 				try {
+					// set the connection timeout
+					if (smtp.getConfiguration().getConnectionTimeout() != null) {
+						client.setConnectTimeout(smtp.getConfiguration().getConnectionTimeout());
+						client.setDefaultTimeout(smtp.getConfiguration().getConnectionTimeout());
+					}
+					else {
+						// default to 1 minute
+						client.setConnectTimeout(60000);
+						client.setDefaultTimeout(60000);
+					}
+					// set the charset (if any)
+					if (smtp.getConfiguration().getCharset() != null) {
+						client.setCharset(Charset.forName(smtp.getConfiguration().getCharset()));
+					}
+					
+					logger.debug("Connecting to {}:{}", smtp.getConfig().getHost(), port);
+					// connect
+					client.connect(smtp.getConfiguration().getHost(), port);
+					checkReply(client, "Could not connect to server");
+		
+					if (smtp.getConfiguration().getSocketTimeout() != null) {
+						client.setSoTimeout(smtp.getConfiguration().getSocketTimeout());
+					}
+					else {
+						// also default to 1 minute
+						client.setSoTimeout(60000);
+					}
+				}
+				catch (Exception e) {
+					logger.error("Failed to set up connection", e);
+					throw new RuntimeException(e);
+				}
+				boolean failed = false;
+				try {
+					logger.debug("Sending HELO");
 					// send helo
 					checkReply(client, client.helo(clientHost), "Failed the helo command");
 					
 					if (context == null || implicitSSL || ((SMTPSClient) client).execTLS()) {
 						// set sender/recipients
+						logger.debug("Setting sender: {}", from);
 						client.setSender(from);
 						checkReply(client, "Failed to set sender: " + from);
 						for (String recipient : to) {
+							logger.debug("Adding recipient: {}", recipient);
 							client.addRecipient(recipient);
 							checkReply(client, "Failed to set recipient: " + recipient);
 						}
 						
+						logger.debug("Sending data");
 						// let's start writing...
 						Writer writer = client.sendMessageData();
 						MimeFormatter formatter = new MimeFormatter();
@@ -329,11 +372,19 @@ public class Services {
 				}
 				catch (RuntimeException e) {
 					logger.error("Could not complete request", e);
+					failed = true;
 					throw e;
 				}
 				finally {
-					client.logout();
-					client.disconnect();
+					try {
+						client.logout();
+						client.disconnect();
+					}
+					catch (Exception e) {
+						if (!failed) {
+							throw new RuntimeException(e);
+						}
+					}
 				}
 			}
 		}
