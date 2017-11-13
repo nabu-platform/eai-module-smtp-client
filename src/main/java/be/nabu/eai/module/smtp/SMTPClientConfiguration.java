@@ -12,7 +12,7 @@ import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
 import be.nabu.utils.security.EncryptionXmlAdapter;
 
 @XmlRootElement(name = "smtpServer")
-@XmlType(propOrder = { "keystore", "implicitSSL", "startTls", "host", "port", "username", "password", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset", "blacklist", "bcc", "overrideTo" })
+@XmlType(propOrder = { "keystore", "implicitSSL", "startTls", "host", "port", "username", "password", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset", "blacklist", "bcc", "overrideTo", "subjectTemplate" })
 public class SMTPClientConfiguration {
 	
 	private KeyStoreArtifact keystore;
@@ -26,6 +26,7 @@ public class SMTPClientConfiguration {
 	private String blacklist;
 	private List<String> bcc;
 	private List<String> overrideTo;
+	private String subjectTemplate;
 	
 	@EnvironmentSpecific
 	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
@@ -149,5 +150,12 @@ public class SMTPClientConfiguration {
 		this.overrideTo = overrideTo;
 	}
 	
+	@EnvironmentSpecific
+	public String getSubjectTemplate() {
+		return subjectTemplate;
+	}
+	public void setSubjectTemplate(String subjectTemplate) {
+		this.subjectTemplate = subjectTemplate;
+	}
 
 }

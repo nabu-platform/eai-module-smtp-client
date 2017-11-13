@@ -40,6 +40,7 @@ import be.nabu.utils.mime.api.ModifiablePart;
 import be.nabu.utils.mime.api.Part;
 import be.nabu.utils.mime.impl.MimeFormatter;
 import be.nabu.utils.mime.impl.MimeHeader;
+import be.nabu.utils.mime.impl.MimeUtils;
 import be.nabu.utils.mime.impl.PlainMimeContentPart;
 import be.nabu.utils.mime.impl.PlainMimeMultiPart;
 import be.nabu.utils.security.SSLContextType;
@@ -133,7 +134,7 @@ public class Services {
 		return information;
 	}
 	
-	public void send(@WebParam(name = "part") Part part, @WebParam(name = "from") String from, @WebParam(name = "to") @NotNull List<String> to, @WebParam(name = "smtpClientId") @NotNull String smtpClientId, @WebParam(name = "notifyOnFailure") Boolean notifyOnFailure) throws Exception {
+	public void send(@WebParam(name = "part") Part part, @WebParam(name = "from") String from, @WebParam(name = "to") @NotNull List<String> to, @WebParam(name = "smtpClientId") @NotNull String smtpClientId, @WebParam(name = "notifyOnFailure") Boolean notifyOnFailure, @WebParam(name = "quoteBoundary") Boolean quoteBoundary) throws Exception {
 		if (part == null) {
 			return;
 		}
@@ -141,6 +142,19 @@ public class Services {
 		SMTPClientArtifact smtp = executionContext.getServiceContext().getResolver(SMTPClientArtifact.class).resolve(smtpClientId);
 		if (smtp == null) {
 			throw new IllegalArgumentException("Could not find the smtp server: " + smtpClientId);
+		}
+		
+		// update the subject if necessary (nice for test environments)
+		if (part instanceof ModifiablePart && smtp.getConfig().getSubjectTemplate() != null && !smtp.getConfig().getSubjectTemplate().isEmpty()) {
+			String template = smtp.getConfig().getSubjectTemplate();
+			// if you did not specify a location to put the actual subject, we append it at the end
+			if (!template.contains("${value}")) {
+				template += " ${value}";
+			}
+			Header header = MimeUtils.getHeader("Subject", part.getHeaders());
+			header = new MimeHeader("Subject", header == null || header.getValue() == null ? template.replace("${value}", "") : template.replace("${value}", header.getValue()));
+			((ModifiablePart) part).removeHeader("Subject");
+			((ModifiablePart) part).setHeader(header);
 		}
 		
 		try {
@@ -278,6 +292,9 @@ public class Services {
 					// let's start writing...
 					Writer writer = client.sendMessageData();
 					MimeFormatter formatter = new MimeFormatter();
+					if (quoteBoundary != null) {
+						formatter.setQuoteBoundary(quoteBoundary);
+					}
 					WritableStraightByteToCharContainer output = new WritableStraightByteToCharContainer(IOUtils.wrap(writer));
 					formatter.format(part, output);
 					output.close();
@@ -359,6 +376,9 @@ public class Services {
 						// let's start writing...
 						Writer writer = client.sendMessageData();
 						MimeFormatter formatter = new MimeFormatter();
+						if (quoteBoundary != null) {
+							formatter.setQuoteBoundary(quoteBoundary);
+						}
 						WritableStraightByteToCharContainer output = new WritableStraightByteToCharContainer(IOUtils.wrap(writer));
 						formatter.format(part, output);
 						output.close();
@@ -395,7 +415,7 @@ public class Services {
 				notification.setContext(Arrays.asList(smtpClientId));
 				// differentiate between client and server errors
 				notification.setType("nabu.protocols.smtp.client");
-				notification.setProperties(SmtpRequestSummary.build(from, to, part));
+				notification.setProperties(SmtpRequestSummary.build(from, to, part, quoteBoundary));
 				notification.setMessage("Failed to send email: " + e.getMessage());
 				notification.setDescription(Notification.format(e));
 				notification.setSeverity(Severity.ERROR);
@@ -409,12 +429,15 @@ public class Services {
 		private List<String> to;
 		private String from, content;
 		
-		public static SmtpRequestSummary build(String from, List<String> to, Part part) {
+		public static SmtpRequestSummary build(String from, List<String> to, Part part, Boolean quoteBoundary) {
 			SmtpRequestSummary summary = new SmtpRequestSummary();
 			summary.setTo(to);
 			summary.setFrom(from);
 			try {
 				MimeFormatter formatter = new MimeFormatter();
+				if (quoteBoundary != null) {
+					formatter.setQuoteBoundary(quoteBoundary);
+				}
 				formatter.setAllowBinary(false);
 				ByteBuffer buffer = IOUtils.newByteBuffer();
 				formatter.format(part, buffer);
