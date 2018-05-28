@@ -299,7 +299,7 @@ public class Services {
 					formatter.format(part, output);
 					output.close();
 					if (!client.completePendingCommand()) {
-						throw new RuntimeException("Could not send the data: " + client.getReply() + " : " + client.getReplyString());
+						throw new RuntimeException("Could not send the data: " + client.getReplyCode() + " : " + client.getReplyString());
 					}
 				}
 				catch (RuntimeException e) {
@@ -390,7 +390,7 @@ public class Services {
 						throw new RuntimeException("Secure connection could not be established");
 					}
 				}
-				catch (RuntimeException e) {
+				catch (Exception e) {
 					logger.error("Could not complete request", e);
 					failed = true;
 					throw e;
