@@ -6,13 +6,15 @@ import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlType;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
+import be.nabu.eai.api.Advanced;
+import be.nabu.eai.api.Comment;
 import be.nabu.eai.api.EnvironmentSpecific;
 import be.nabu.eai.module.keystore.KeyStoreArtifact;
 import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
 import be.nabu.utils.security.EncryptionXmlAdapter;
 
 @XmlRootElement(name = "smtpServer")
-@XmlType(propOrder = { "keystore", "implicitSSL", "startTls", "host", "port", "username", "password", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset", "blacklist", "bcc", "overrideTo", "subjectTemplate" })
+@XmlType(propOrder = { "keystore", "implicitSSL", "startTls", "host", "port", "username", "password", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset", "blacklist", "bcc", "overrideTo", "overrideToInMime", "subjectTemplate" })
 public class SMTPClientConfiguration {
 	
 	private KeyStoreArtifact keystore;
@@ -27,6 +29,7 @@ public class SMTPClientConfiguration {
 	private List<String> bcc;
 	private List<String> overrideTo;
 	private String subjectTemplate;
+	private Boolean overrideToInMime;
 	
 	@EnvironmentSpecific
 	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
@@ -156,6 +159,15 @@ public class SMTPClientConfiguration {
 	}
 	public void setSubjectTemplate(String subjectTemplate) {
 		this.subjectTemplate = subjectTemplate;
+	}
+	
+	@Advanced
+	@Comment(title = "Some smtp servers (most notably outlook.office365.com) override the SMTP level RCPT TO with the To header from the mime, if you enable this, the To in the mime will also be overridden. To err on the safe side, this is default true. Note that gmail sends the mail correctly so you can disable this for gmail.")
+	public Boolean getOverrideToInMime() {
+		return overrideToInMime;
+	}
+	public void setOverrideToInMime(Boolean overrideToInMime) {
+		this.overrideToInMime = overrideToInMime;
 	}
 
 }

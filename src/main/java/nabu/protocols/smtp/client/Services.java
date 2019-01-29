@@ -161,6 +161,15 @@ public class Services {
 			// this is mostly for test purposes
 			if (smtp.getConfig().getOverrideTo() != null && !smtp.getConfig().getOverrideTo().isEmpty()) {
 				to = smtp.getConfig().getOverrideTo();
+				// some servers override the smtp level rcpt to with the mime level to. this means even if we override the to, it still gets delivered to the original addresses
+				// to prevent this, we can also override the to in the mime
+				// to err on the side of caution, we set this default to true
+				if (smtp.getConfig().getOverrideToInMime() == null || smtp.getConfig().getOverrideToInMime()) {
+					((ModifiablePart) part).removeHeader("To");
+					// also remove the cc or they might be added in as well
+					((ModifiablePart) part).removeHeader("Cc");
+					((ModifiablePart) part).setHeader(new MimeHeader("To", join(smtp.getConfig().getOverrideTo())));
+				}
 			}
 			else if (smtp.getConfiguration().getBlacklist() != null) {
 				// filter the "to" on the blacklist of the smtp artifact
