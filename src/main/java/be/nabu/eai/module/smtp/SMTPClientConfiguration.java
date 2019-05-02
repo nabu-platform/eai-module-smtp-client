@@ -14,11 +14,12 @@ import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
 import be.nabu.utils.security.EncryptionXmlAdapter;
 
 @XmlRootElement(name = "smtpServer")
-@XmlType(propOrder = { "keystore", "implicitSSL", "startTls", "host", "port", "username", "password", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset", "blacklist", "bcc", "overrideTo", "overrideToInMime", "subjectTemplate" })
+@XmlType(propOrder = { "keystore", "implicitSSL", "startTls", "host", "port", "username", "password", "from", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset", "blacklist", "bcc", "overrideTo", "overrideToInMime", "subjectTemplate" })
 public class SMTPClientConfiguration {
 	
 	private KeyStoreArtifact keystore;
 	private String host, username, password;
+	private String from;
 	private LoginMethod loginMethod;
 	private String clientHost;
 	private Integer port, connectionTimeout, socketTimeout;
@@ -168,6 +169,14 @@ public class SMTPClientConfiguration {
 	}
 	public void setOverrideToInMime(Boolean overrideToInMime) {
 		this.overrideToInMime = overrideToInMime;
+	}
+	
+	@EnvironmentSpecific
+	public String getFrom() {
+		return from;
+	}
+	public void setFrom(String from) {
+		this.from = from;
 	}
 
 }

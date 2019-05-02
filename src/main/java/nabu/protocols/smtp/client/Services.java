@@ -53,12 +53,16 @@ public class Services {
 	private ExecutionContext executionContext;
 	
 	@WebResult(name = "part")
-	public Part newEmailPart(@WebParam(name = "from") String from, @WebParam(name = "to") List<String> to, @WebParam(name = "cc") List<String> cc, @WebParam(name = "subject") String subject, @WebParam(name = "content") InputStream content, @WebParam(name = "type") EmailType type, @WebParam(name = "headers") List<Header> headers, @WebParam(name = "attachments") List<EmailAttachment> attachments) {
+	public Part newEmailPart(@WebParam(name = "from") String from, @WebParam(name = "to") List<String> to, @WebParam(name = "cc") List<String> cc, @WebParam(name = "subject") String subject, @WebParam(name = "content") InputStream content, @WebParam(name = "type") EmailType type, @WebParam(name = "charset") Charset charset, @WebParam(name = "headers") List<Header> headers, @WebParam(name = "attachments") List<EmailAttachment> attachments) {
 		if (type == null) {
 			type = EmailType.HTML;
 		}
+		String contentType = type.getContentType();
+		if (charset != null) {
+			contentType += "; charset=" + charset.name().toLowerCase();
+		}
 		ModifiablePart part = new PlainMimeContentPart(null, IOUtils.wrap(content), 
-			new MimeHeader("Content-Type", type.getContentType())
+			new MimeHeader("Content-Type", contentType)
 		);
 		if (attachments != null && !attachments.isEmpty()) {
 			PlainMimeMultiPart multiPart = new PlainMimeMultiPart(null, new MimeHeader("Content-Type", "multipart/mixed"));
@@ -186,10 +190,19 @@ public class Services {
 			}
 			
 			if (from == null) {
-				from = smtp.getConfiguration().getUsername();
+				from = smtp.getConfig().getFrom();
+				if (from == null) {
+					from = smtp.getConfiguration().getUsername();
+				}
 				if (from == null) {
 					throw new IllegalArgumentException("No from given and did not find a username in the smtp artifact: " + smtpClientId);
 				}
+			}
+			
+			// TODO: make configurable?
+			Header fromHeader = MimeUtils.getHeader("From", part.getHeaders());
+			if (fromHeader == null && part instanceof ModifiablePart) {
+				((ModifiablePart) part).setHeader(new MimeHeader("From", from));
 			}
 			
 			// check if we want implicit ssl
