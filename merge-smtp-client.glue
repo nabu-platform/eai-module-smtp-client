@@ -1,0 +1,190 @@
+result = xml.objectify(file.read("smtp-server.xml"))
+
+tag("SMTP Client")
+
+result/host = parameter(
+	name: "host",
+	category: "Basic",
+	title: null,
+	description: "The remote host to connect to",
+	type: null,
+	encrypted: false,
+	optional: true,
+	raw: result/host)/current
+
+result/port = parameter(
+	name: "port",
+	category: "Basic",
+	title: null,
+	description: "The remote port to connect to",
+	type: "long",
+	encrypted: false,
+	optional: true,
+	raw: result/port)/current
+
+result/from = parameter(
+	name: "from",
+	category: "Basic",
+	title: null,
+	description: "If you leave the from empty in your business logic, this one will be filled in.",
+	type: null,
+	encrypted: false,
+	optional: true,
+	raw: result/from)/current
+
+result/subjectTemplate = parameter(
+	name: "subjectTemplate",
+	category: "Basic",
+	title: null,
+	description: "You can set a template for the subject. The actual subject is appended at the end or can be positioned using the ${value} syntax. E.g. prepend all mails in development with [DEV].",
+	type: null,
+	encrypted: false,
+	optional: true,
+	raw: result/subjectTemplate)/current
+
+result/clientHost = parameter(
+	name: "clientHost",
+	category: "Basic",
+	title: null,
+	description: "The client will make itself known to the server, if it has to be a specific value, configure that here",
+	type: null,
+	encrypted: false,
+	optional: true,
+	raw: result/clientHost)/current
+	
+result/charset = parameter(
+	name: "charset",
+	category: "Basic",
+	title: null,
+	description: "The charset to use when communicating with the server",
+	type: null,
+	encrypted: false,
+	default: "The system default charset",
+	optional: true,
+	raw: result/charset)/current
+	
+result/username = parameter(
+	name: "username",
+	category: "Security",
+	title: null,
+	description: "The username to authenticate on the SMTP server",
+	type: null,
+	encrypted: false,
+	optional: true,
+	raw: result/username)/current
+
+result/password = parameter(
+	name: "password",
+	category: "Security",
+	title: null,
+	description: "The password to authenticate on the SMTP server",
+	type: "password",
+	encrypted: true,
+	optional: true,
+	raw: result/password)/current
+	
+result/loginMethod = parameter(
+	name: "loginMethod",
+	category: "Security",
+	title: null,
+	description: "The login method to authenticate on the SMTP server",
+	type: null,
+	encrypted: false,
+	optional: true,
+	raw: result/loginMethod,
+	enumeration: "PLAIN", "LOGIN", "CRAM_MD5", "XOAUTH")/current
+
+result/implicitSSL = parameter(
+	name: "implicitSSL",
+	category: "Security",
+	title: null,
+	description: "Enable this setting if the server only accepts SSL connections",
+	type: "boolean",
+	encrypted: false,
+	optional: true,
+	hide: "startTls == 'true'",
+	raw: result/implicitSSL)/current
+	
+result/startTls = parameter(
+	name: "startTls",
+	category: "Security",
+	title: null,
+	description: "Enable this setting if you want to upgrade an unsecure connection to a secure one using starttls",
+	type: "boolean",
+	encrypted: false,
+	optional: true,
+	hide: "implicitSSL == 'true'",
+	raw: result/startTls)/current
+
+result/keystore = parameter(
+	name: "keystore",
+	category: "Security",
+	title: null,
+	description: "The keystore to use",
+	type: "artifact",
+	encrypted: false,
+	optional: true,
+	raw: result/keystore)/current
+	
+result/blacklist = parameter(
+	name: "blacklist",
+	category: "Recipients",
+	title: null,
+	description: "You can configure a regex here. Any recipient that matches this regex is dropped from the list. If no one remains, the mail is not sent.",
+	type: null,
+	encrypted: false,
+	optional: true,
+	raw: result/blacklist)/current
+	
+result/bcc = split("[\s]*,[\s]*", parameter(
+	name: "bcc",
+	category: "Recipients",
+	title: null,
+	description: "You can automatically add a bcc to any mail sent. Add multiple using comma separation.",
+	type: null,
+	encrypted: false,
+	optional: true,
+	raw: join(", ", result/bcc))/current)
+
+result/overrideTo = split("[\s]*,[\s]*", parameter(
+	name: "overrideTo",
+	category: "Recipients",
+	title: null,
+	description: "You can override the recipients list with this comma separated list of recipients. This is mostly for testing purposes.",
+	type: null,
+	encrypted: false,
+	optional: true,
+	raw: join(", ", result/overrideTo))/current)
+	
+result/overrideToInMime = parameter(
+	name: "overrideToInMime",
+	category: "Recipients",
+	title: null,
+	description: "Make sure the to in the mail matches the to in the SMTP protocol. Some mail servers expect and enforce this.",
+	type: "boolean",
+	encrypted: false,
+	optional: true,
+	default: "true",
+	raw: result/overrideToInMime)/current
+
+result/connectionTimeout = parameter(
+	name: "connectionTimeout",
+	category: "Limits",
+	title: null,
+	description: "The connection timeout",
+	type: "long",
+	encrypted: false,
+	optional: true,
+	raw: result/connectionTimeout)/current
+	
+result/socketTimeout = parameter(
+	name: "socketTimeout",
+	category: "Limits",
+	title: null,
+	description: "The socket timeout",
+	type: "long",
+	encrypted: false,
+	optional: true,
+	raw: result/socketTimeout)/current
+
+file.write("smtp-server.xml", xml.stringify(result))
