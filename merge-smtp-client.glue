@@ -171,20 +171,22 @@ result/connectionTimeout = parameter(
 	name: "connectionTimeout",
 	category: "Limits",
 	title: null,
-	description: "The connection timeout",
+	description: "The connection timeout (in ms)",
 	type: "long",
 	encrypted: false,
 	optional: true,
+	default: "1 minute",
 	raw: result/connectionTimeout)/current
 	
 result/socketTimeout = parameter(
 	name: "socketTimeout",
 	category: "Limits",
 	title: null,
-	description: "The socket timeout",
+	description: "The socket timeout (in ms)",
 	type: "long",
 	encrypted: false,
 	optional: true,
+	default: "1 minute",
 	raw: result/socketTimeout)/current
 
 file.write("smtp-server.xml", xml.stringify(result))
