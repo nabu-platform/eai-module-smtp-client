@@ -313,6 +313,13 @@ public class Services {
 					logger.debug("Sending data");
 					// let's start writing...
 					Writer writer = client.sendMessageData();
+					if (writer == null) {
+						checkReply(client, "Could not start DATA");
+						// https://commons.apache.org/proper/commons-net/javadocs/api-3.6/org/apache/commons/net/smtp/SMTPClient.html#sendMessageData()
+						// Send the SMTP DATA command in preparation to send an email message. This method returns a DotTerminatedMessageWriter instance to which the message can be written. Null is returned if the DATA command fails.
+						// not sure if the check reply can actually check why it failed, throw an exception just in case
+						throw new RuntimeException("Could not send SMTP DATA command");
+					}
 					MimeFormatter formatter = new MimeFormatter();
 					if (quoteBoundary != null) {
 						formatter.setQuoteBoundary(quoteBoundary);
