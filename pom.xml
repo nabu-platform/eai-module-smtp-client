@@ -2,7 +2,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>nabu</groupId>
 	<artifactId>eai-module-smtp-client</artifactId>
-	<version>1.8</version>
+	<version>1.9-SNAPSHOT</version>
 	<name>eai-module-smtp-client</name>
 	<url>http://nabu.be</url>
 	<parent>
