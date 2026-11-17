@@ -22,6 +22,8 @@ import java.io.InputStream;
 import java.io.Writer;
 import java.net.InetAddress;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -31,6 +33,9 @@ import javax.jws.WebResult;
 import javax.jws.WebService;
 import javax.net.ssl.SSLContext;
 import javax.validation.constraints.NotNull;
+
+import jakarta.mail.internet.AddressException;
+import jakarta.mail.internet.InternetAddress;
 
 import nabu.protocols.smtp.client.types.EmailAttachment;
 import nabu.protocols.smtp.client.types.SMTPClientInformation;
@@ -47,7 +52,10 @@ import be.nabu.eai.module.smtp.EmailType;
 import be.nabu.eai.module.smtp.LoginMethod;
 import be.nabu.eai.module.smtp.SMTPClientArtifact;
 import be.nabu.eai.repository.Notification;
+import be.nabu.libs.services.ServiceRuntime;
 import be.nabu.libs.services.api.ExecutionContext;
+import be.nabu.libs.services.api.Service;
+import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.validator.api.ValidationMessage.Severity;
 import be.nabu.utils.io.IOUtils;
 import be.nabu.utils.io.api.ByteBuffer;
@@ -125,6 +133,16 @@ public class Services {
 		return part;
 	}
 	
+	static String invokeAccessTokenProvider(Service provider, String smtpClientId, String username, String from, String context, ExecutionContext executionContext) throws Exception {
+		ComplexContent input = provider.getServiceInterface().getInputDefinition().newInstance();
+		input.set("smtpClientId", smtpClientId);
+		input.set("username", username);
+		input.set("from", from);
+		input.set("context", context);
+		ComplexContent output = new ServiceRuntime(provider, executionContext).run(input);
+		return output == null ? null : (String) output.get("accessToken");
+	}
+
 	private static String join(List<String> recipients) {
 		StringBuilder builder = new StringBuilder();
 		for (int i = 0; i < recipients.size(); i++) {
@@ -178,6 +196,7 @@ public class Services {
 			((ModifiablePart) part).setHeader(header);
 		}
 		
+		String xoauth2Stage = "preparation";
 		try {
 			// this is mostly for test purposes
 			if (smtp.getConfig().getOverrideTo() != null && !smtp.getConfig().getOverrideTo().isEmpty()) {
@@ -227,6 +246,7 @@ public class Services {
 			boolean startTls = smtp.getConfiguration().getStartTls() != null && smtp.getConfiguration().getStartTls();
 	
 			// check if we have a configured keystore
+			xoauth2Stage = "TLS configuration";
 			KeyStoreArtifact keystore = smtp.getConfiguration().getKeystore();
 			SSLContext context = keystore == null ? null : keystore.getKeyStore().newContext(SSLContextType.TLS);
 			// use the default context if you have explicitly set the implicitSSL boolean
@@ -242,10 +262,18 @@ public class Services {
 			else {
 				port = smtp.getConfiguration().getPort();
 			}
+			xoauth2Stage = "client hostname";
 			String clientHost = smtp.getConfiguration().getClientHost() == null
 				? InetAddress.getLocalHost().getHostName()
 				: smtp.getConfiguration().getClientHost();
 			
+			LoginMethod loginMethod = smtp.getConfiguration().getLoginMethod();
+			boolean oauth2 = loginMethod == LoginMethod.XOAUTH2;
+			if (oauth2 && (smtp.getConfiguration().getUsername() == null || smtp.getConfiguration().getUsername().trim().isEmpty()
+					|| smtp.getConfiguration().getAccessTokenProvider() == null || (!implicitSSL && !startTls))) {
+				throw new IllegalArgumentException("XOAUTH2 requires a username, access token provider and TLS");
+			}
+
 			// if we want to authenticate, use the appropriate client
 			if (smtp.getConfiguration().getUsername() != null) {
 				logger.debug("Starting " + (context == null ? "insecure" : "secure") + " connection with authentication");
@@ -253,6 +281,9 @@ public class Services {
 					? new AuthenticatingSMTPClient() 
 					: new AuthenticatingSMTPClient(implicitSSL, context);
 				try {
+					if (oauth2) {
+						client.setEndpointCheckingEnabled(true);
+					}
 					// set the connection timeout
 					if (smtp.getConfiguration().getConnectionTimeout() != null) {
 						client.setConnectTimeout(smtp.getConfiguration().getConnectionTimeout());
@@ -265,14 +296,22 @@ public class Services {
 						client.setDefaultTimeout(60000);
 					}
 					// set charset (if any)
-					if (smtp.getConfiguration().getCharset() != null) {
+					if (smtp.getConfiguration().getCharset() != null && !oauth2) {
 						client.setCharset(Charset.forName(smtp.getConfiguration().getCharset()));
 					}
 					
 					logger.debug("Connecting to: " + smtp.getConfiguration().getHost() + ":" + port);
+					xoauth2Stage = implicitSSL ? "connect/TLS" : "connect";
 					// connect
 					client.connect(smtp.getConfiguration().getHost(), port);
-					checkReply(client, "Could not connect to server");
+					if (oauth2) {
+						if (!SMTPReply.isPositiveCompletion(client.getReplyCode())) {
+							throw xoauth2Failure("connect", client.getReplyCode(), null);
+						}
+					}
+					else {
+						checkReply(client, "Could not connect to server");
+					}
 					
 					if (smtp.getConfiguration().getSocketTimeout() != null) {
 						client.setSoTimeout(smtp.getConfiguration().getSocketTimeout());
@@ -283,6 +322,9 @@ public class Services {
 					}
 				}
 				catch (Exception e) {
+					if (oauth2) {
+						throw e;
+					}
 					logger.error("Failed to set up connection", e);
 					throw new RuntimeException(e);
 				}
@@ -290,53 +332,97 @@ public class Services {
 				try {
 					logger.debug("Sending EHLO");
 					// perform an ehlo
-					checkReply(client, client.ehlo(clientHost), "Failed the ehlo command");
+					xoauth2Stage = "EHLO";
+					int ehloReply = client.ehlo(clientHost);
+					if (oauth2 && !SMTPReply.isPositiveCompletion(ehloReply)) {
+						throw xoauth2Failure("EHLO", ehloReply, null);
+					}
+					if (!oauth2) {
+						checkReply(client, ehloReply, "Failed the ehlo command");
+					}
 					
 					// we want a secure connection if possible
-					if (startTls) {
+					if (startTls && (!oauth2 || !implicitSSL)) {
+						xoauth2Stage = "STARTTLS";
 						if (!client.execTLS()) {
 							throw new RuntimeException("Could not start tls");
 						}
 						// resend the ehlo according to spec: http://www.ietf.org/rfc/rfc3207.txt (section 4.2)
-						checkReply(client, client.ehlo(clientHost), "Failed the ehlo command");
+						xoauth2Stage = "EHLO after TLS";
+						int tlsEhloReply = client.ehlo(clientHost);
+						if (oauth2 && !SMTPReply.isPositiveCompletion(tlsEhloReply)) {
+							throw xoauth2Failure("EHLO after TLS", tlsEhloReply, null);
+						}
+						if (!oauth2) {
+							checkReply(client, tlsEhloReply, "Failed the ehlo command");
+						}
 					}
-					LoginMethod method = smtp.getConfiguration().getLoginMethod();
-					if (method == null) {
-						method = LoginMethod.CRAM_MD5;
+					LoginMethod method = loginMethod == null ? LoginMethod.CRAM_MD5 : loginMethod;
+					if (oauth2) {
+						xoauth2Stage = "sender validation";
+						from = effectiveSender(from);
+						xoauth2Stage = "token-provider";
+						// Reuse the caller's execution context; never elevate token retrieval to ROOT.
+						String token = invokeAccessTokenProvider(smtp.getConfiguration().getAccessTokenProvider(),
+							smtp.getId(), smtp.getConfiguration().getUsername(), from, smtp.getConfiguration().getContext(), executionContext);
+						xoauth2Stage = "auth";
+						authXoauth2(client, smtp.getConfiguration().getUsername(), token);
 					}
-					
-					logger.debug("Logging in using method '" + method + "' and username: " + smtp.getConfiguration().getUsername());
-					// authenticate
-					client.auth(method.getMethod(), smtp.getConfiguration().getUsername(), smtp.getConfiguration().getPassword());
-					checkReply(client, "Failed the login");
+					else {
+						logger.debug("Logging in using method '" + method + "' and username: " + smtp.getConfiguration().getUsername());
+						client.auth(method.getMethod(), smtp.getConfiguration().getUsername(), smtp.getConfiguration().getPassword());
+						checkReply(client, "Failed the login");
+					}
 					
 					logger.debug("Setting sender: {}", from);
 					// set sender/recipients
+					xoauth2Stage = "envelope sender";
 					client.setSender(from);
-					checkReply(client, "Failed to set sender: " + from);
+					if (oauth2 && !SMTPReply.isPositiveCompletion(client.getReplyCode())) {
+						throw xoauth2Failure(xoauth2Stage, client.getReplyCode(), null);
+					}
+					if (!oauth2) {
+						checkReply(client, "Failed to set sender: " + from);
+					}
+					xoauth2Stage = "recipients";
 					for (String recipient : to) {
 						logger.debug("Setting recipient: {}", recipient);
 						client.addRecipient(recipient);
-						checkReply(client, "Failed to set recipient: " + recipient);
+						if (oauth2 && !SMTPReply.isPositiveCompletion(client.getReplyCode())) {
+							throw xoauth2Failure(xoauth2Stage, client.getReplyCode(), null);
+						}
+						if (!oauth2) {
+							checkReply(client, "Failed to set recipient: " + recipient);
+						}
 					}
 					// it is often interesting to also combine all sent mails in a central mailbox for later complaints
 					if (smtp.getConfig().getBcc() != null && !smtp.getConfig().getBcc().isEmpty()) {
 						for (String recipient : smtp.getConfig().getBcc()) {
 							client.addRecipient(recipient);
-							checkReply(client, "Failed to set recipient: " + recipient);	
+							if (oauth2 && !SMTPReply.isPositiveCompletion(client.getReplyCode())) {
+								throw xoauth2Failure(xoauth2Stage, client.getReplyCode(), null);
+							}
+							if (!oauth2) {
+								checkReply(client, "Failed to set recipient: " + recipient);
+							}
 						}
 					}
 					
 					logger.debug("Sending data");
 					// let's start writing...
+					xoauth2Stage = "DATA command";
 					Writer writer = client.sendMessageData();
 					if (writer == null) {
+						if (oauth2) {
+							throw xoauth2Failure(xoauth2Stage, client.getReplyCode(), null);
+						}
 						checkReply(client, "Could not start DATA");
 						// https://commons.apache.org/proper/commons-net/javadocs/api-3.6/org/apache/commons/net/smtp/SMTPClient.html#sendMessageData()
 						// Send the SMTP DATA command in preparation to send an email message. This method returns a DotTerminatedMessageWriter instance to which the message can be written. Null is returned if the DATA command fails.
 						// not sure if the check reply can actually check why it failed, throw an exception just in case
 						throw new RuntimeException("Could not send SMTP DATA command");
 					}
+					xoauth2Stage = "DATA write (delivery uncertain)";
 					MimeFormatter formatter = new MimeFormatter();
 					if (quoteBoundary != null) {
 						formatter.setQuoteBoundary(quoteBoundary);
@@ -344,12 +430,18 @@ public class Services {
 					WritableStraightByteToCharContainer output = new WritableStraightByteToCharContainer(IOUtils.wrap(writer));
 					formatter.format(part, output);
 					output.close();
+					xoauth2Stage = "DATA completion (delivery uncertain)";
 					if (!client.completePendingCommand()) {
+						if (oauth2) {
+							throw xoauth2Failure(xoauth2Stage, client.getReplyCode(), null);
+						}
 						throw new RuntimeException("Could not send the data: " + client.getReplyCode() + " : " + client.getReplyString());
 					}
 				}
-				catch (RuntimeException e) {
-					logger.error("Could not complete request", e);
+				catch (Exception e) {
+					if (!oauth2) {
+						logger.error("Could not complete request", e);
+					}
 					failed = true;
 					throw e;
 				}
@@ -359,7 +451,14 @@ public class Services {
 						client.disconnect();
 					}
 					catch (Exception e) {
-						if (!failed) {
+						if (oauth2) {
+							if (!failed) {
+								xoauth2Stage = "disconnect (delivery uncertain)";
+								throw e;
+							}
+							logger.warn("SMTP XOAUTH2 disconnect failed (category={})", safeXoauth2Category(e));
+						}
+						else if (!failed) {
 							throw new RuntimeException(e);
 						}
 					}
@@ -455,6 +554,11 @@ public class Services {
 			}
 		}
 		catch (Exception e) {
+			if (smtp.getConfiguration().getLoginMethod() == LoginMethod.XOAUTH2) {
+				// Never forward provider exceptions, server replies or their causes to notifications.
+				e = e instanceof Xoauth2Failure ? e : xoauth2Failure(xoauth2Stage, 0, e);
+				logger.error(e.getMessage());
+			}
 			if (notifyOnFailure == null || notifyOnFailure) {
 				// fire a notification
 				Notification notification = new Notification();
@@ -512,6 +616,85 @@ public class Services {
 		public void setContent(String content) {
 			this.content = content;
 		}
+	}
+
+	static String effectiveSender(String from) {
+		if (from == null || from.trim().isEmpty()) {
+			throw new IllegalArgumentException("XOAUTH2 requires a single valid sender address");
+		}
+		for (int i = 0; i < from.length(); i++) {
+			if (Character.isISOControl(from.charAt(i))) {
+				throw new IllegalArgumentException("XOAUTH2 requires a single valid sender address");
+			}
+		}
+		try {
+			InternetAddress[] addresses = InternetAddress.parse(from, true);
+			if (addresses.length == 1 && !addresses[0].isGroup()) {
+				addresses[0].validate();
+				String address = addresses[0].getAddress();
+				if (address != null && !address.isEmpty() && address.equals(address.trim())) {
+					return address;
+				}
+			}
+		}
+		catch (AddressException e) {
+			LoggerFactory.getLogger(Services.class).debug("Invalid SMTP XOAUTH2 sender ({})", e.getClass().getName());
+			throw new IllegalArgumentException("XOAUTH2 requires a single valid sender address");
+		}
+		throw new IllegalArgumentException("XOAUTH2 requires a single valid sender address");
+	}
+
+	static void authXoauth2(AuthenticatingSMTPClient client, String username, String token) throws IOException {
+		if (username == null || username.trim().isEmpty() || token == null || token.trim().isEmpty()
+				|| !username.equals(username.trim()) || !token.equals(token.trim())) {
+			throw new IllegalArgumentException("Invalid XOAUTH2 credentials");
+		}
+		for (String value : Arrays.asList(username, token)) {
+			for (int i = 0; i < value.length(); i++) {
+				if (Character.isISOControl(value.charAt(i))) {
+					throw new IllegalArgumentException("Invalid XOAUTH2 credentials");
+				}
+			}
+		}
+		String payload = "user=" + username + "\u0001auth=Bearer " + token + "\u0001\u0001";
+		int reply = client.sendCommand("AUTH XOAUTH2 " + Base64.getEncoder().encodeToString(payload.getBytes(StandardCharsets.UTF_8)));
+		if (reply == 334) {
+			// Complete the server's error challenge without sending credentials again.
+			client.sendCommand("");
+		}
+		if (reply != 235) {
+			throw xoauth2Failure("auth", reply, null);
+		}
+	}
+
+	private static final class Xoauth2Failure extends IllegalStateException {
+		private static final long serialVersionUID = 1L;
+
+		private Xoauth2Failure(String message) {
+			super(message);
+		}
+	}
+
+	static IllegalStateException xoauth2Failure(String stage, int replyCode, Exception cause) {
+		String category = cause == null ? "SMTP rejection" : safeXoauth2Category(cause);
+		String code = replyCode >= 100 && replyCode <= 599 ? ", reply=" + replyCode : "";
+		return new Xoauth2Failure("SMTP XOAUTH2 send failed (stage=" + stage + code + ", category=" + category + ")");
+	}
+
+	private static String safeXoauth2Category(Exception e) {
+		if (e instanceof java.net.SocketTimeoutException) {
+			return "timeout";
+		}
+		if (e instanceof javax.net.ssl.SSLException) {
+			return "TLS error";
+		}
+		if (e instanceof IOException) {
+			return "I/O error";
+		}
+		if (e instanceof IllegalArgumentException) {
+			return "invalid input";
+		}
+		return "operation error";
 	}
 
 	private void checkReply(SMTPClient client, String message) {

@@ -25,7 +25,8 @@ public enum LoginMethod {
 	CRAM_MD5(AuthenticatingSMTPClient.AUTH_METHOD.CRAM_MD5),
 	PLAIN(AuthenticatingSMTPClient.AUTH_METHOD.PLAIN),
 	LOGIN(AuthenticatingSMTPClient.AUTH_METHOD.LOGIN),
-	XOAUTH(AuthenticatingSMTPClient.AUTH_METHOD.XOAUTH)
+	XOAUTH(AuthenticatingSMTPClient.AUTH_METHOD.XOAUTH),
+	XOAUTH2(null)
 	;
 	
 	private AUTH_METHOD method;

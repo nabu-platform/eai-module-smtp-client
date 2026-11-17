@@ -26,18 +26,23 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import be.nabu.eai.api.Advanced;
 import be.nabu.eai.api.Comment;
 import be.nabu.eai.api.EnvironmentSpecific;
+import be.nabu.eai.api.InterfaceFilter;
+import be.nabu.libs.services.api.DefinedService;
+import be.nabu.libs.types.api.annotation.Field;
 import be.nabu.eai.module.keystore.KeyStoreArtifact;
 import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
 import be.nabu.utils.security.EncryptionXmlAdapter;
 
 @XmlRootElement(name = "smtpServer")
-@XmlType(propOrder = { "keystore", "implicitSSL", "startTls", "host", "port", "username", "password", "from", "loginMethod", "clientHost", "connectionTimeout", "socketTimeout", "charset", "blacklist", "bcc", "overrideTo", "overrideToInMime", "subjectTemplate" })
+@XmlType(propOrder = { "keystore", "implicitSSL", "startTls", "host", "port", "username", "password", "from", "loginMethod", "accessTokenProvider", "context", "clientHost", "connectionTimeout", "socketTimeout", "charset", "blacklist", "bcc", "overrideTo", "overrideToInMime", "subjectTemplate" })
 public class SMTPClientConfiguration {
 	
 	private KeyStoreArtifact keystore;
 	private String host, username, password;
 	private String from;
 	private LoginMethod loginMethod;
+	private DefinedService accessTokenProvider;
+	private String context;
 	private String clientHost;
 	private Integer port, connectionTimeout, socketTimeout;
 	private Boolean implicitSSL;
@@ -113,6 +118,26 @@ public class SMTPClientConfiguration {
 	}
 	public void setLoginMethod(LoginMethod loginMethod) {
 		this.loginMethod = loginMethod;
+	}
+
+	@EnvironmentSpecific
+	@Field(hide = "loginMethod != 'XOAUTH2'", comment = "Service that supplies a usable raw bearer token for each SMTP authentication attempt.")
+	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
+	@InterfaceFilter(implement = "be.nabu.eai.module.smtp.api.SMTPAccessTokenProvider.getAccessToken")
+	public DefinedService getAccessTokenProvider() {
+		return accessTokenProvider;
+	}
+	public void setAccessTokenProvider(DefinedService accessTokenProvider) {
+		this.accessTokenProvider = accessTokenProvider;
+	}
+
+	@EnvironmentSpecific
+	@Field(hide = "loginMethod != 'XOAUTH2'", comment = "Optional context passed to the SMTP access token provider.")
+	public String getContext() {
+		return context;
+	}
+	public void setContext(String context) {
+		this.context = context;
 	}
 	
 	@EnvironmentSpecific
